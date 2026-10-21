@@ -213,7 +213,7 @@ class Plan:
         if not candidatos:
             self.avisos.append("%s no cabe en la planta %d" % (s.nombre, nivel))
             return False
-        rng = random.Random("sala-%s-%s" % (self.semilla, s.clave))
+        rng = random.Random("sala-%s-%s-%s" % (self.semilla, s.clave, self.intento))
         x0 = candidatos[0] if len(candidatos) == 1 else rng.choice(candidatos)
         s.x0, s.piso = x0, PISOS[nivel]
         s.nivel = nivel
@@ -221,8 +221,19 @@ class Plan:
         self.tramo[nivel] = _unir(self.tramo[nivel], (x0, x0 + s.ancho - 1))
         return True
 
-    def _rampa_libre(self, nivel_a, nivel_b, a, b):
-        return self._libre(nivel_a, a, b, 1) and (nivel_b == 0 or self._libre(nivel_b, a, b, 1))
+    def _rampa_libre(self, arriba, abajo, x, sentido, largo):
+        """¿Puede bajar una rampa desde x sin meterse en ninguna sala? Al principio va pegada
+        al suelo de la planta de arriba y al final al techo de las salas de la de abajo,
+        así que sólo se mira cada tramo contra las salas de su planta."""
+        alto_sala = ALTO_SALA - 1
+        hasta_arriba = ALTO_GALERIA * 2 - 2                               # columnas junto a la planta de arriba
+        desde_abajo = max(0, largo - 2 * (alto_sala + ALTO_GALERIA - 3))   # columnas junto a la de abajo
+        def tramo(i, j):
+            a, b = sorted((x + sentido * i, x + sentido * j))
+            return a, b
+        if arriba and not self._libre(arriba, *tramo(0, min(largo, hasta_arriba)), 1):
+            return False
+        return self._libre(abajo, *tramo(desde_abajo, largo), 1)
 
     def _elegir_rampa(self, arriba, abajo, cerca, sentido_previo):
         """Busca dónde poner la rampa de la planta `arriba` a la de `abajo` (0 = superficie):
@@ -235,7 +246,7 @@ class Plan:
                 a, b = min(x, x2), max(x, x2)
                 if a < BORDE or b > ANCHO - 1 - BORDE:
                     continue
-                libre = self._rampa_libre(abajo, arriba, a, b) if arriba else self._libre(abajo, a, b, 1)
+                libre = self._rampa_libre(arriba, abajo, x, sentido, largo)
                 coste = _alargar(self.tramo[arriba], x) + _alargar(self.tramo[abajo], x2)
                 if arriba == 0:
                     coste = abs(x - cerca) * 0.5 + _alargar(self.tramo[abajo], x2)
@@ -245,10 +256,21 @@ class Plan:
                     mejor = (coste, x, x2, sentido, libre)
         _, x, x2, sentido, libre = mejor
         if not libre:
-            self.avisos.append("no hay sitio para una rampa sin atravesar una sala (planta %d)" % abajo)
+            self.rampa_mala = abajo
         return x, x2, sentido
 
     def _montar_nido(self, principales):
+        """Prueba varias colocaciones al azar hasta que todas las rampas quepan sin atravesar salas."""
+        for self.intento in range(12):
+            self.rampa_mala = None
+            self.avisos = []
+            self._probar_nido(principales)
+            if self.rampa_mala is None:
+                return
+        self.avisos.append("no hay sitio para una rampa sin atravesar una sala (planta %d)" % self.rampa_mala)
+
+    def _probar_nido(self, principales):
+        self.obras = []
         self.ocupado = {n: [] for n in PISOS}
         self.tramo = {n: None for n in PISOS}     # (x_ini, x_fin) de la galería de cada planta
         colocadas = []

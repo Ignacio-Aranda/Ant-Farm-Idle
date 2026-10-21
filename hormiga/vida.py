@@ -112,17 +112,17 @@ class Vida:
             self.espera_comida = rng.uniform(25, 70)
             opciones = [("miga", 4), ("semilla", 3 if mes in (9, 10, 11, 12, 1) else 1),
                         ("azucar", 1.5), ("galleta", 0.6), ("bocadillo", 0.3)]
-            if 7 <= mes <= 9:
+            if 7 <= mes <= 9 and m.superficie.chumbera_x is not None:
                 opciones.append(("higo", 3))
-            if 8 <= mes <= 9:
+            if 8 <= mes <= 9 and m.superficie.arbol_x is not None:
                 opciones.append(("almendra", 3))
             clave = rng.choices([o for o, _ in opciones], [w for _, w in opciones])[0]
             nombre, arte, col, peso = COMIDAS[clave]
             x = rng.uniform(6, W - 8)
             if clave == "higo":
-                x = rng.uniform(1, 12)
+                x = max(1, m.superficie.chumbera_x + rng.uniform(-4, 6))
             elif clave == "almendra":
-                x = m.superficie.arbol_x - m.ox + rng.uniform(0, 14)
+                x = m.superficie.arbol_x - m.ox + rng.uniform(-7, 7)
             c = Cosa("comida", clave, nombre, x, arte, col, peso)
             self.cosas.append(c)
             if peso >= 4:

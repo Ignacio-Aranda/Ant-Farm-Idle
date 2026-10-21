@@ -21,6 +21,7 @@ from hormiga.tierra import ANCHO, ARCILLA, ARENA, HUMUS, PROF, ROCA
 from . import arte as A
 from . import hormiga_arte as HA
 from . import muebles as MU
+from . import paisaje as PA
 from .base import (CH, CW, CLAVE, Letras, circulo_luz, claro, espejo, mezclar, multiplicar, oscuro,
                    reloj_grande, rgb, superficie, tenir)
 
@@ -336,7 +337,8 @@ class Render:
                 h = alturas[min(len(alturas) - 1, x // CW)]
                 pts.append((x, self.G - 10 - int(h * 9)))
             pts.append((self.W, self.G))
-            pygame.draw.polygon(s, lejos, pts)
+            if m.superficie.montes_lejos:
+                pygame.draw.polygon(s, lejos, pts)
             # colinas más cerca
             r = random.Random(m.semilla)
             pts = [(0, self.G)]
@@ -346,15 +348,26 @@ class Render:
                 pts.append((x, self.G - int(h)))
             pts.append((self.W, self.G))
             pygame.draw.polygon(s, cerca, pts)
-            # la Catedral (la Manquita) en la ladera
-            cx = self.px(m.superficie.catedral_x)
-            base = self.G - 10 - int(alturas[min(len(alturas) - 1, m.superficie.catedral_x)] * 9) + 6
-            cat_s = A.rejilla(A.CATEDRAL, {"k": cat, "w": (250, 210, 110) if m.de_noche else oscuro(cat, 0.7)})
-            cat_s = pygame.transform.scale(cat_s, (cat_s.get_width() * 2, cat_s.get_height() * 2))
-            cat_s.set_colorkey(CLAVE)
-            s.blit(cat_s, (cx, base - cat_s.get_height() + 4))
+            # construcciones al fondo, en la ladera
+            for k, (pieza, x) in enumerate(m.superficie.piezas_fondo):
+                if pieza not in PA.FONDO:
+                    self._aviso("paisaje: no existe la pieza de fondo «%s»" % pieza)
+                    continue
+                ctx = PA.Contexto(0, m.semilla, m.de_noche, k)
+                PA.FONDO[pieza][0](s, self.px(x), self._base_fondo(x), ctx, cat, (250, 210, 110))
             self.capa_montes = s
         self.dst.blit(self.capa_montes, (0, 0))
+
+    def _base_fondo(self, x):
+        """Altura (en píxeles) de la ladera de los montes en la columna x."""
+        alturas = self.m.superficie.montes
+        if not self.m.superficie.montes_lejos:
+            return self.G - 8
+        return self.G - 10 - int(alturas[min(len(alturas) - 1, max(0, x))] * 9) + 6
+
+    def _aviso(self, texto):
+        if texto not in self.m.avisos:
+            self.m.avisos.append(texto)
 
     # ================================================================ superficie
 
@@ -369,8 +382,15 @@ class Render:
             self.clave_sup = clave
             s = superficie(self.W, self.G + 4)
             self._pintar_superficie(s)
-            if self.m.de_noche:
+            m = self.m
+            if m.de_noche:
                 s = multiplicar(s, (110, 120, 170))
+                # de noche se encienden las ventanas y las farolas
+                dia = m.ahora.timetuple().tm_yday
+                for k, (pieza, x) in enumerate(m.superficie.piezas_suelo):
+                    luces = PA.SUELO.get(pieza, (None, None))[1]
+                    if luces:
+                        luces(s, self.px(x), self.G, PA.Contexto(dia, m.semilla, True, k))
             self.capa_sup = s
         self.dst.blit(self.capa_sup, (0, 0))
 
@@ -383,11 +403,11 @@ class Render:
         if m.llovio:
             for cx in sup.charcos:
                 pygame.draw.ellipse(s, (90, 130, 190), (self.px(cx), G - 2, 18, 4))
-        self._chumbera(s, self.px(sup.chumbera_x) + 4, G, dia)
-        self._palmera(s, self.px(m.salidas_x[0] + 22) + 30, G, dia)
-        self._olivo(s, self.px(sup.olivo_x) + 26, G, dia)
-        self._almendro(s, self.px(sup.arbol_x) + 34, G, dia)
-        self._farola(s, self.px(sup.farola_x), G)
+        for k, (pieza, x) in enumerate(sup.piezas_suelo):
+            if pieza not in PA.SUELO:
+                self._aviso("paisaje: no existe la pieza «%s»" % pieza)
+                continue
+            PA.SUELO[pieza][0](s, self.px(x), G, PA.Contexto(dia, m.semilla, m.de_noche, k))
         self._flores(s, G, dia)
         self._piedras(s, G)
         self._cementerio(s, G)
@@ -428,102 +448,6 @@ class Render:
                 s.set_at((x, y), r.choice([(176, 136, 90), (96, 66, 40), (160, 120, 80)]))
         pygame.draw.ellipse(s, (20, 12, 8), (cx - 4, G - 4, 9, 6))
 
-    def _chumbera(self, s, x, G, dia):
-        verde, osc = (96, 150, 70), (64, 110, 50)
-        palas = [(0, -10, 9, 12), (8, -18, 9, 11), (-6, -20, 8, 10), (3, -28, 8, 10), (12, -28, 7, 9)]
-        pygame.draw.rect(s, (110, 120, 70), (x + 2, G - 6, 4, 6))
-        for dx, dy, w, h in palas:
-            pygame.draw.ellipse(s, osc, (x + dx, G + dy, w, h))
-            pygame.draw.ellipse(s, verde, (x + dx + 1, G + dy + 1, w - 2, h - 3))
-            for k in range(3):
-                s.set_at((x + dx + 2 + k * 2, G + dy + 3 + (k % 2) * 3), (230, 230, 190))
-        if 182 <= dia <= 273:
-            for dx, dy in ((4, -29), (11, -29), (15, -29), (12, -19)):
-                pygame.draw.ellipse(s, (210, 70, 60), (x + dx, G + dy - 2, 3, 4))
-
-    def _almendro(self, s, cx, G, dia):
-        r = random.Random("almendro-%s" % self.m.semilla)
-        tronco, tronco_o = (110, 74, 50), (80, 52, 34)
-        # tronco y ramas
-        pygame.draw.polygon(s, tronco_o, [(cx - 4, G), (cx + 4, G), (cx + 2, G - 22), (cx - 2, G - 22)])
-        pygame.draw.polygon(s, tronco, [(cx - 3, G), (cx + 2, G), (cx + 1, G - 22), (cx - 1, G - 22)])
-        ramas = [((cx, G - 20), (cx - 16, G - 38)), ((cx, G - 22), (cx + 18, G - 40)),
-                 ((cx, G - 24), (cx - 4, G - 48)), ((cx - 8, G - 30), (cx - 24, G - 34)),
-                 ((cx + 9, G - 31), (cx + 26, G - 33)), ((cx - 2, G - 36), (cx + 8, G - 50))]
-        for a, b in ramas:
-            pygame.draw.line(s, tronco_o, a, b, 3)
-            pygame.draw.line(s, tronco, a, b, 1)
-        if dia < 20 or dia > 335:
-            return  # invierno: ramas desnudas
-        if dia <= 64:
-            cols, dens = [(250, 190, 210), (255, 235, 240), (240, 160, 190), (255, 255, 255)], 1.0
-        elif dia <= 273:
-            cols, dens = [(70, 140, 60), (90, 165, 70), (55, 115, 50), (110, 180, 80)], 1.0
-        else:
-            dens = max(0.15, 1 - (dia - 273) / 60)
-            cols = [(220, 140, 50), (200, 100, 40), (230, 190, 70), (150, 90, 50)]
-        for _ in range(int(150 * dens)):
-            ang = r.uniform(0, math.pi)
-            rad = r.uniform(0, 1) ** 0.6
-            x = cx + int(math.cos(ang) * rad * 32)
-            y = G - 40 - int(math.sin(ang) * rad * 22) + r.randint(-4, 6)
-            pygame.draw.circle(s, r.choice(cols), (x, y), r.choice((2, 2, 3)))
-        if 65 <= dia <= 180:  # mariquitas
-            for k in range(3):
-                pygame.draw.circle(s, (220, 30, 30), (cx - 14 + k * 13, G - 42 + (k % 2) * 5), 1)
-
-    def _palmera(self, s, cx, G, dia):
-        tronco = [(150, 110, 70), (120, 86, 54)]
-        for k in range(14):
-            y = G - k * 4
-            x = cx + int(math.sin(k / 6) * 3)
-            pygame.draw.rect(s, tronco[k % 2], (x - 3, y - 4, 6, 4))
-        tx, ty = cx + int(math.sin(13 / 6) * 3), G - 56
-        hojas = (60, 130, 60), (90, 160, 70)
-        for ang in (-170, -140, -110, -70, -40, -10, 20, -90):
-            a = math.radians(ang)
-            pts = []
-            for k in range(9):
-                d = k * 4
-                pts.append((tx + int(math.cos(a) * d), ty + int(math.sin(a) * d * 0.6 + (k * k) * 0.35)))
-            pygame.draw.lines(s, hojas[0], False, pts, 3)
-            pygame.draw.lines(s, hojas[1], False, pts, 1)
-            for (x, y) in pts[2::2]:
-                pygame.draw.line(s, hojas[0], (x, y), (x + 2, y + 3))
-                pygame.draw.line(s, hojas[0], (x, y), (x - 2, y + 3))
-        if 213 <= dia <= 300:
-            for k in range(5):
-                pygame.draw.circle(s, (220, 140, 40), (tx - 4 + k * 2, ty + 3 + (k % 2)), 1)
-
-    def _olivo(self, s, cx, G, dia):
-        r = random.Random("olivo-%s" % self.m.semilla)
-        t1, t2 = (100, 86, 66), (70, 60, 46)
-        pygame.draw.polygon(s, t2, [(cx - 6, G), (cx + 6, G), (cx + 2, G - 10), (cx + 4, G - 18), (cx - 1, G - 20),
-                                    (cx - 3, G - 12)])
-        pygame.draw.line(s, t1, (cx - 2, G), (cx + 1, G - 16), 2)
-        pygame.draw.line(s, t2, (cx, G - 16), (cx - 10, G - 24), 2)
-        pygame.draw.line(s, t2, (cx + 2, G - 16), (cx + 11, G - 25), 2)
-        cols = [(120, 140, 90), (100, 122, 76), (140, 158, 108), (88, 110, 70)]
-        aceitunas = dia >= 274 or dia <= 31
-        for _ in range(110):
-            ang = r.uniform(0, math.pi)
-            rad = r.uniform(0, 1) ** 0.6
-            x = cx + int(math.cos(ang) * rad * 24)
-            y = G - 28 - int(math.sin(ang) * rad * 12) + r.randint(-3, 5)
-            pygame.draw.circle(s, r.choice(cols), (x, y), 2)
-        if aceitunas:
-            for _ in range(14):
-                x, y = cx + r.randint(-18, 18), G - 28 + r.randint(-8, 5)
-                s.set_at((x, y), (70, 30, 70))
-                s.set_at((x + 1, y), (50, 20, 50))
-
-    def _farola(self, s, x, G):
-        pygame.draw.rect(s, (40, 40, 46), (x, G - 34, 2, 34))
-        pygame.draw.rect(s, (40, 40, 46), (x - 2, G - 2, 6, 2))
-        pygame.draw.polygon(s, (40, 40, 46), [(x - 4, G - 36), (x + 5, G - 36), (x + 3, G - 42), (x - 2, G - 42)])
-        col = (255, 230, 150) if self.m.de_noche else (190, 190, 170)
-        pygame.draw.rect(s, col, (x - 2, G - 41, 5, 4))
-
     def _piedras(self, s, G):
         for px_, _ in self.m.superficie.piedras:
             x = self.px(px_)
@@ -561,9 +485,7 @@ class Render:
         sup = m.superficie
         anchos = [max(5, len(n) + 2) for n in m.idos]
         total = sum(anchos) + len(anchos) + 3
-        x = sup.arbol_x - total - 3
-        if x < m.salidas_x[0] + 6:
-            x = m.salidas_x[0] + 6
+        x = min(sup.cementerio_x, m.plan_ancho - total - 2)
         x0 = self.px(x)
         # valla
         ancho_px = self.px(total)
@@ -927,12 +849,19 @@ class Render:
         noche = m.de_noche
         # farola encendida
         if noche:
-            fx = self.px(sup.farola_x)
-            dst.blit(self.halo_farola, (fx - 40, G - 80), special_flags=pygame.BLEND_ADD)
+            for x in sup.farolas:
+                fx = self.px(x)
+                dst.blit(self.halo_farola, (fx - 40, G - 80), special_flags=pygame.BLEND_ADD)
+        # lo que se mueve al fondo (el faro, las aspas del molino)
+        for k, (pieza, x) in enumerate(sup.piezas_fondo):
+            animar = PA.FONDO.get(pieza, (None, None))[1]
+            if animar:
+                animar(dst, self.px(x), self._base_fondo(x), PA.Contexto(0, m.semilla, noche, k), t)
         # búho
-        if noche and m.lluvia == 0 and random.Random("buho-%s" % m.ahora.date()).random() < 0.6:
+        if sup.buho_x is not None and noche and m.lluvia == 0 and \
+                random.Random("buho-%s" % m.ahora.date()).random() < 0.6:
             ojos = "cerrado" if int(t * 1.3) % 9 == 0 else "abierto"
-            dst.blit(self.S[("buho", ojos, 1)], (self.px(sup.olivo_x) + 19, G - 52))
+            dst.blit(self.S[("buho", ojos, 1)], (self.px(sup.buho_x) - 7, G - 52))
         # luciérnagas
         if noche and 6 <= m.ahora.month <= 8 and m.lluvia == 0:
             r = random.Random("luc-%s" % m.ahora.date())

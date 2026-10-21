@@ -15,3 +15,35 @@ jornada = "09:00-18:00"    # quien es jefe sólo llama al despacho en este horar
 entrada = 20               # columna preferida para la entrada (de 3 a 156)
 # Salas que excavan a lo largo del año, en orden (cada una usa el tipo de su nombre):
 obras = ["despensa", "museo", "hongos", "almacen", "biblioteca"]
+
+[paisaje]
+# Lo que se ve arriba. x es la posición en % del ancho (0 = izquierda, 100 = derecha).
+montes = true              # montes al fondo
+costa = true               # gaviotas
+cementerio = 74            # dónde empieza el cementerio de los que se fueron (en %)
+
+# En la superficie: chumbera, almendro, palmera, olivo, pino, farola, banco, casa
+[[paisaje.suelo]]
+pieza = "chumbera"
+x = 2
+
+[[paisaje.suelo]]
+pieza = "palmera"
+x = 30
+
+[[paisaje.suelo]]
+pieza = "farola"
+x = 42
+
+[[paisaje.suelo]]
+pieza = "olivo"
+x = 49
+
+[[paisaje.suelo]]
+pieza = "almendro"
+x = 89
+
+# Al fondo, sobre los montes: catedral, ciudad, faro, molino, torre, castillo
+[[paisaje.fondo]]
+pieza = "catedral"
+x = 58

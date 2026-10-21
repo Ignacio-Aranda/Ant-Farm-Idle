@@ -8,6 +8,11 @@ from motor.sprites import construir, lineas, mascara_lineas, pintor_fijo
 
 from . import decoracion as DE
 
+# Lo que hay en la superficie si config.toml no dice nada (x en % del ancho)
+SUELO_DEFECTO = [{"pieza": "chumbera", "x": 2}, {"pieza": "palmera", "x": 30}, {"pieza": "farola", "x": 42},
+                 {"pieza": "olivo", "x": 49}, {"pieza": "almendro", "x": 89}]
+FONDO_DEFECTO = [{"pieza": "catedral", "x": 58}]
+
 
 def _sprite(arte, mascara=None, defecto="blanco", solido=False, extra=None):
     al = lineas(arte)
@@ -265,10 +270,7 @@ class Superficie:
         self.m = m
         rng = random.Random("superficie-%s" % m.semilla)
         W = m.ancho
-        self.arbol_x = int(W * 0.84)
-        self.palmera_x = int(W * 0.27)
-        self.olivo_x = int(W * 0.45)
-        self.chumbera_x = 2
+        self._leer_paisaje(m.cfg.get("paisaje", {}), W)
         self.hierba = "".join(rng.choice(",;'\".`,,") for _ in range(W))
         self.flores = []
         for _ in range(W // 5):
@@ -288,12 +290,32 @@ class Superficie:
         self.cima = [y0 - int(h) + 1 for h in self.montes]   # primera fila de montaña llena
         self.cima_min = min(self.cima)
         self.fondo_monte = None
-        self.catedral_x = int(W * 0.56)
-        self.farola_x = int(W * 0.42)
         self.piedras = [(rng.randrange(2, W - 3), rng.choice(["◖◗", "◖▬◗", "°", "◦"]))
                         for _ in range(W // 16)]
         self.copa_rng = [[rng.random() for _ in range(20)] for _ in range(10)]
         self.copa_rng2 = [[rng.random() for _ in range(20)] for _ in range(10)]
+
+    def _leer_paisaje(self, p, W):
+        """[paisaje] de config.toml. Las x vienen en % del ancho y aquí pasan a columnas."""
+        def piezas(lista):
+            out = []
+            for d in lista:
+                try:
+                    out.append((str(d["pieza"]).lower(), int(max(0.0, min(100.0, float(d.get("x", 50)))) / 100 * (W - 1))))
+                except (KeyError, TypeError, ValueError):
+                    self.m.avisos.append("paisaje: pieza mal escrita (%s)" % d)
+            return out
+        self.piezas_suelo = piezas(p.get("suelo", SUELO_DEFECTO))
+        self.piezas_fondo = piezas(p.get("fondo", FONDO_DEFECTO))
+        self.montes_lejos = bool(p.get("montes", True))
+        self.costa = bool(p.get("costa", True))
+        self.cementerio_x = int(max(0.0, min(100.0, float(p.get("cementerio", 74)))) / 100 * (W - 1))
+        def primera(*nombres):
+            return next((x for n in nombres for pieza, x in self.piezas_suelo if pieza == n), None)
+        self.arbol_x = primera("almendro")                       # flores, hojas y almendras
+        self.chumbera_x = primera("chumbera")                    # higos chumbos
+        self.buho_x = primera("olivo", "pino", "almendro", "palmera")
+        self.farolas = [x for pieza, x in self.piezas_suelo if pieza == "farola"]
 
     # -------------------------------------------------------------- lógica
 
@@ -338,12 +360,12 @@ class Superficie:
 
         # hojas de otoño cayendo del almendro
         dia_año = m.ahora.timetuple().tm_yday
-        if 274 <= dia_año <= 335 and rng.random() < dt * 0.4:
-            self.particulas.append([self.arbol_x + rng.uniform(1, 17), m.suelo_y - 7, rng.uniform(-1, 1),
+        if self.arbol_x is not None and 274 <= dia_año <= 335 and rng.random() < dt * 0.4:
+            self.particulas.append([self.arbol_x + rng.uniform(-8, 8), m.suelo_y - 7, rng.uniform(-1, 1),
                                     1.5, rng.choice("',`"), color(rng.choice(["o", "y", "n"])), 8])
         # pétalos del almendro en flor
-        if 20 <= dia_año <= 64 and rng.random() < dt * 0.3:
-            self.particulas.append([self.arbol_x + rng.uniform(1, 17), m.suelo_y - 7, rng.uniform(-1.5, 0.5),
+        if self.arbol_x is not None and 20 <= dia_año <= 64 and rng.random() < dt * 0.3:
+            self.particulas.append([self.arbol_x + rng.uniform(-8, 8), m.suelo_y - 7, rng.uniform(-1.5, 0.5),
                                     1.2, ".", color(rng.choice(["P", "W"])), 10])
         # confeti, corazones, chispas de fiestas
         deco = m.decoraciones
@@ -434,8 +456,8 @@ class Superficie:
             self.bichos.append(b)
         uni = m.unicode
         dia_claro = not m.de_noche and m.lluvia == 0
-        # gaviotas (Málaga es costa)
-        if dia_claro and rng.random() < dt / 45:
+        # gaviotas (si hay costa cerca)
+        if self.costa and dia_claro and rng.random() < dt / 45:
             der = rng.random() < 0.5
             for k in range(rng.randint(1, 3)):
                 c = [_sprite("‿v‿" if uni else "~v~", None, "W"), _sprite("⌒v⌒" if uni else "^v^", None, "W")]
