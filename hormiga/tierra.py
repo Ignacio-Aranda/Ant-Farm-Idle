@@ -24,6 +24,7 @@ HUMUS, ARENA, ARCILLA, ROCA = 1, 2, 3, 4
 
 ALTO_GALERIA = 4
 ALTO_SALA = 7
+ANCHO_MIN = 14                   # ancho mínimo de las salas de salas/ (en columnas)
 PISOS = {0: 0, 1: 8, 2: 18, 3: 28, 4: 38}   # fila del suelo de cada planta (0 = la superficie)
 ENTRADA = 20                     # columna preferida para la entrada principal
 BORDE = 3                        # columnas que se dejan libres a cada lado
@@ -71,7 +72,10 @@ class Sala:
 
     def punto(self, rng):
         """Un sitio del suelo de la sala donde puede pararse una hormiga."""
-        return (rng.randint(self.x0 + 5, self.x0 + self.ancho - 6), self.piso)
+        a, b = self.x0 + 5, self.x0 + self.ancho - 6
+        if a > b:   # sala muy estrecha: en el centro
+            a = b = self.x0 + max(0, self.ancho) // 2
+        return (rng.randint(a, b), self.piso)
 
 
 class Obra:

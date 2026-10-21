@@ -55,7 +55,7 @@ nombre = "Desarrollo"
 color = "cian"
 planta = 2          # de 1 (la más alta) a 4 (la más honda)
 x = 40              # opcional: columna fija; sin x va en un hueco al azar de su planta
-ancho = 40
+ancho = 40          # en columnas (como mínimo 14)
 tipo = "trabajo"    # trabajo, reuniones, despacho, comedor, fuente... (tipos/)
 
 [[miembro]]

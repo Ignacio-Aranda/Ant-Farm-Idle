@@ -260,6 +260,24 @@ PIEZAS = {
 }
 
 
+def revisar(muebles, donde, avisos):
+    """Avisa de las piezas y los huecos que no existen (al cargar los ficheros). Un sitio
+    escrito como texto con un número ("150") se pasa a número."""
+    huecos = {**HUECOS_SUELO, **HUECOS_PARED}
+    for mu in muebles:
+        pieza = str(mu.get("pieza", "")).lower()
+        if pieza not in PIEZAS:
+            avisos.append("%s: no existe la pieza «%s»" % (donde, pieza))
+        sitio = mu.get("sitio")
+        if sitio is None or isinstance(sitio, (int, float)) and not isinstance(sitio, bool):
+            continue
+        try:
+            mu["sitio"] = float(str(sitio).strip().replace(",", "."))
+        except ValueError:
+            if str(sitio).lower() not in huecos:
+                avisos.append("%s: no existe el hueco «%s» (%s va a su sitio de siempre)" % (donde, sitio, pieza))
+
+
 def colocar(pieza, sitio, r):
     """Esquina (x, y) donde va la pieza dentro del rectángulo r de la sala.
     En las piezas de suelo, y es la línea del suelo; en las de pared, lo alto de la pieza."""

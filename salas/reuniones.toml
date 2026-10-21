@@ -12,10 +12,12 @@ tipo = "reuniones"
 
 # Reuniones fijas: a esa hora las hormigas citadas vienen a la sala.
 #   dia     : lunes, martes, miércoles, jueves, viernes o "todos" (de lunes a viernes)
-#   hora    : "HH:MM"
+#   hora    : "HH:MM", de "00:00" a "23:59"
 #   minutos : duración
-#   quien   : "todos", el nombre de una sala (desarrollo, diseno...)
-#             o una lista de nombres, p. ej. ["Elena", "Ana"]
+#   quien   : "todos"; una sala, por el nombre de su fichero sin .toml ("diseno") o por
+#             el que sale en pantalla ("Diseño"); una persona ("Elena"), o una lista
+#             de nombres, p. ej. ["Elena", "Ana"]
+#   Si una reunión está mal escrita o no convoca a nadie, sale un aviso y no se hace.
 [[reunion]]
 nombre = "Reunión de equipo"
 dia = "lunes"

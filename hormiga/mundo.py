@@ -32,7 +32,9 @@ class Mundo:
         self.cfg = cfg
         self.pantalla = pantalla
         self.reloj = reloj
-        self.avisos = avisos if avisos is not None else []
+        # avisos de los ficheros (se rehacen en cada recarga) y del trazado y el dibujo (se quedan)
+        self.avisos_carga = avisos if avisos is not None else []
+        self.avisos = []
         self._avisado = set()
         self.raiz = cfg.get("raiz", ".")
         self.clima = False   # se crea al primer uso (y sólo si el reloj va en hora)
@@ -81,7 +83,7 @@ class Mundo:
                 try:
                     q["alta"] = _fecha(q["alta"]) if q.get("alta") else None
                 except ValueError:
-                    self.avisos.append("%s: fecha de alta mal escrita" % q["nombre"])
+                    self.avisos_carga.append("%s: fecha de alta mal escrita" % q["nombre"])
                     q["alta"] = None
                 self.personas.append(q)
         self.idos_cfg = []
@@ -91,11 +93,15 @@ class Mundo:
             try:
                 q["fecha"] = _fecha(q["fecha"]) if q.get("fecha") else None
             except ValueError:
-                self.avisos.append("%s: fecha de baja mal escrita" % q["nombre"])
+                self.avisos_carga.append("%s: fecha de baja mal escrita" % q["nombre"])
                 q["fecha"] = None
             self.idos_cfg.append(q)
         self.hormigas = {}
         self._diario_dia = None
+
+    def todos_los_avisos(self):
+        """Los avisos de los ficheros y los del trazado y el dibujo, sin repetir."""
+        return list(dict.fromkeys(self.avisos_carga + self.avisos))
 
     # -------------------------------------------------------------- montaje
 
@@ -249,19 +255,18 @@ class Mundo:
             if not sala:
                 continue
             for r in cfg.get("reuniones", []):
-                try:
+                try:   # ya vienen comprobadas al cargar; aun así, una mal escrita no tumba el hormiguero
                     h, mi = (int(v) for v in str(r.get("hora", "10:00")).split(":"))
                     dia = str(r.get("dia", "todos")).lower()
-                    dur = float(r.get("minutos", 60))
-                except ValueError:
+                    inicio = ahora.replace(hour=h, minute=mi, second=0, microsecond=0)
+                    fin = inicio + datetime.timedelta(minutes=float(r.get("minutos", 60)))
+                except (TypeError, ValueError, OverflowError):
                     continue
                 if dia == "todos":
                     if not laborable:
                         continue
                 elif dia.replace("miercoles", "miércoles") != dias[ahora.weekday()]:
                     continue
-                inicio = ahora.replace(hour=h, minute=mi, second=0, microsecond=0)
-                fin = inicio + datetime.timedelta(minutes=dur)
                 clave = (ahora.date(), cfg["clave"], r.get("nombre", ""), h, mi)
                 if not (inicio <= ahora < fin) or clave in self._citas_hechas:
                     continue

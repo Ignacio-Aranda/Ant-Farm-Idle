@@ -60,11 +60,22 @@ def argumentos(argv=None):
     return p.parse_args(argv)
 
 
+def cargar(A, args, avisos):
+    """Lee los ficheros (hormiga.app.cargar) y avisa de los muebles que no existen."""
+    from . import muebles as MU
+    cfg, salas, idos, fiestas = A.cargar(args, avisos)
+    for t in cfg["tipos"].values():
+        MU.revisar(t["muebles"], t["fichero"], avisos)
+    for s in salas:
+        MU.revisar(s["muebles"], s["fichero"], avisos)
+    return cfg, salas, idos, fiestas
+
+
 def preparar(args):
     sys.path.insert(0, RAIZ)
     from hormiga import app as A
     avisos = []
-    cfg, salas, idos, fiestas = A.cargar(args, avisos)
+    cfg, salas, idos, fiestas = cargar(A, args, avisos)
     if args.semilla is not None:
         cfg["general"]["semilla"] = args.semilla
     elif args.demo:
@@ -111,7 +122,7 @@ def sin_pantalla(args):
         grande = pygame.transform.scale(pantalla, (1280, 1024))
         pygame.image.save(grande, args.captura)
         print("captura guardada en", args.captura)
-    for a in avisos:
+    for a in m.todos_los_avisos():
         print("aviso:", a)
 
 
@@ -167,11 +178,16 @@ def con_pantalla(args):
                 nueva = firma(args)
                 if nueva != huella:
                     huella = nueva
-                    avisos.clear()
-                    _cfg, salas, idos, fiestas = A.cargar(args, avisos)
-                    m.fiestas = fiestas
-                    m.cargar_gente(salas, idos)
-                    m.actualizar_contexto(forzar=True)
+                    # los avisos de los ficheros se rehacen; los del trazado y el dibujo se quedan
+                    nuevos = []
+                    try:
+                        _cfg, salas, idos, fiestas = cargar(A, args, nuevos)
+                        m.avisos_carga = nuevos
+                        m.fiestas = fiestas
+                        m.cargar_gente(salas, idos)
+                        m.actualizar_contexto(forzar=True)
+                    except Exception as e:   # sigue con lo que tenía
+                        m.avisos_carga.append("no he podido recargar los ficheros: %s" % e)
                     r.clave_sup = None
             if args.demo:
                 m.pausa_texto = reloj.texto if reloj.en_pausa() else None
@@ -185,6 +201,7 @@ def con_pantalla(args):
             if info:
                 txt = "%.0f fps · simulación %.1f ms · dibujo %.1f ms" % (clock.get_fps(), medias[0], medias[1])
                 pantalla.blit(r.letras.texto(txt, (255, 255, 160), 9, fondo=(20, 20, 20)), (6, 44))
+            avisos = m.todos_los_avisos()
             if avisos:
                 pantalla.blit(r.letras.texto("Avisos: " + "; ".join(avisos)[:120], (30, 30, 30), 9,
                                              fondo=(255, 225, 90)), (6, 44))

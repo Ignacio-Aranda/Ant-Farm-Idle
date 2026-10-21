@@ -110,11 +110,41 @@ def a_8(rgb):
     return c, max(rgb) > 200
 
 
+_HEX = set("0123456789abcdefABCDEF")
+
+
+def _hex_bueno(s):
+    s = str(s).strip().lstrip("#")
+    return len(s) in (3, 6) and all(ch in _HEX for ch in s)
+
+
 def hex_a_rgb(s):
-    s = s.lstrip("#")
+    """"#RRGGBB" o "#RGB" -> (r, g, b). Mal escrito ("#GG8800"), el blanco de por defecto."""
+    if not _hex_bueno(s):
+        return rgb_de_256(_BASE["blanco"][0])
+    s = str(s).strip().lstrip("#")
     if len(s) == 3:
         s = "".join(ch * 2 for ch in s)
     return tuple(int(s[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def es_color(valor):
+    """¿Se entiende este color de la configuración? (un nombre de la lista, un número
+    de 0 a 255, "#RGB" o "#RRGGBB")"""
+    if isinstance(valor, bool):
+        return False
+    if isinstance(valor, int):
+        return 0 <= valor <= 255
+    if not isinstance(valor, str):
+        return False
+    s = valor.strip()
+    if s.startswith("#"):
+        return _hex_bueno(s)
+    if s.isdecimal():
+        return int(s) <= 255
+    if len(s) == 1 and s.lower() in CODIGOS:
+        return True
+    return s.lower().replace(" ", "_").replace("-", "_") in _BASE
 
 
 _CACHE = {}
@@ -139,15 +169,15 @@ def color(valor, defecto="blanco"):
 def _color(valor, defecto):
     if valor is None:
         valor = defecto
-    if isinstance(valor, int):
+    if isinstance(valor, int) and not isinstance(valor, bool) and 0 <= valor <= 255:
         c8, vivo = a_8(rgb_de_256(valor))
         return Color(valor, c8, vivo)
     s = str(valor).strip()
-    if s.startswith("#"):
+    if s.startswith("#") and _hex_bueno(s):
         rgb = hex_a_rgb(s)
         c8, vivo = a_8(rgb)
         return Color(a_256(rgb), c8, vivo)
-    if s.isdigit():
+    if s.isdecimal() and int(s) <= 255:
         return color(int(s))
     if len(s) == 1 and s.lower() in CODIGOS:
         base = CODIGOS[s.lower()]

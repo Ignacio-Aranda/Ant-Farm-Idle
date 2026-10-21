@@ -813,10 +813,7 @@ class Render:
         out, cuenta = [], {}
         for mu in m.muebles_de(sala):
             pieza = str(mu.get("pieza", "")).lower()
-            if pieza not in MU.PIEZAS:
-                aviso = "sala %s: no existe la pieza «%s»" % (sala.nombre, pieza)
-                if aviso not in m.avisos:
-                    m.avisos.append(aviso)
+            if pieza not in MU.PIEZAS:   # el aviso sale al cargar (muebles.revisar)
                 continue
             try:
                 aparece = int(mu.get("aparece", 0))

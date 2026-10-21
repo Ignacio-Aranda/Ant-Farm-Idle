@@ -10,15 +10,19 @@
 #  planta : 1 (la más alta, junto a la superficie) a 4 (la más honda)
 #  x      : opcional, columna del borde izquierdo (de 3 a ~150). Sin x, va en un
 #           hueco al azar de su planta. Los túneles se trazan solos.
-#  ancho  : anchura de la sala (en columnas)
+#  ancho  : anchura de la sala (en columnas, como mínimo 14)
 #  tipo   : el tipo de sala (tipos/*.toml): trabajo, reuniones, despacho,
 #           comedor, fuente... Decide los muebles y qué hacen las hormigas aquí.
 #
 #  nombre : como aparece en el hormiguero
 #  cumple : "DD-MM" (día-mes) -> ese día lleva gorro de fiesta y hay tarta arriba
+#           (también vale "DD-MM-AAAA")
 #  color  : opcional (rojo_brillante, amarillo_brillante, cian, magenta_brillante,
 #           verde_brillante, naranja, azul_brillante, rosa, turquesa, lima, dorado...)
 #  alta   : opcional, "AAAA-MM-DD" si llega más tarde (sale en el diario)
+#
+#  Cada hormiga va por su nombre: si dos personas se llaman igual, la segunda
+#  sale con el de su sala, p. ej. "Ana (Diseño)" (mejor ponles nombres distintos).
 #
 #  Que una hormiga sea de esta sala no significa que esté siempre aquí:
 #  es donde más tiempo pasa, pero también va al comedor, a la fuente a
