@@ -11,6 +11,7 @@ import argparse
 import datetime
 import os
 import random
+import signal
 import sys
 import time
 
@@ -147,46 +148,51 @@ def con_pantalla(args):
     revisado = time.monotonic()
     info = False
     medias = [0.0, 0.0]
-    while True:
-        for ev in pygame.event.get():
-            if ev.type == pygame.QUIT:
-                return
-            if ev.type == pygame.KEYDOWN:
-                if ev.key in (pygame.K_q, pygame.K_ESCAPE):
+    try:
+        while True:
+            for ev in pygame.event.get():
+                if ev.type == pygame.QUIT:
                     return
-                if ev.key == pygame.K_f:
-                    pygame.display.toggle_fullscreen()
-                if ev.key == pygame.K_i:
-                    info = not info
-        dt = min(0.25, clock.tick(fps) / 1000.0)
-        ahora = time.monotonic()
-        if ahora - revisado > 3:
-            revisado = ahora
-            nueva = firma(args)
-            if nueva != huella:
-                huella = nueva
-                avisos.clear()
-                _cfg, salas, idos, fiestas = A.cargar(args, avisos)
-                m.fiestas = fiestas
-                m.cargar_gente(salas, idos)
-                m.actualizar_contexto(forzar=True)
-                r.clave_sup = None
-        if args.demo:
-            m.pausa_texto = reloj.texto if reloj.en_pausa() else None
-        t0 = time.perf_counter()
-        m.paso(dt)
-        t1 = time.perf_counter()
-        r.dibujar()
-        t2 = time.perf_counter()
-        medias[0] = medias[0] * 0.95 + (t1 - t0) * 50
-        medias[1] = medias[1] * 0.95 + (t2 - t1) * 50
-        if info:
-            txt = "%.0f fps · simulación %.1f ms · dibujo %.1f ms" % (clock.get_fps(), medias[0], medias[1])
-            pantalla.blit(r.letras.texto(txt, (255, 255, 160), 9, fondo=(20, 20, 20)), (6, 44))
-        if avisos:
-            pantalla.blit(r.letras.texto("Avisos: " + "; ".join(avisos)[:120], (30, 30, 30), 9,
-                                         fondo=(255, 225, 90)), (6, 44))
-        pygame.display.flip()
+                if ev.type == pygame.KEYDOWN:
+                    if ev.key in (pygame.K_q, pygame.K_ESCAPE):
+                        return
+                    if ev.key == pygame.K_f:
+                        pygame.display.toggle_fullscreen()
+                    if ev.key == pygame.K_i:
+                        info = not info
+            dt = min(0.25, clock.tick(fps) / 1000.0)
+            ahora = time.monotonic()
+            if ahora - revisado > 3:
+                revisado = ahora
+                nueva = firma(args)
+                if nueva != huella:
+                    huella = nueva
+                    avisos.clear()
+                    _cfg, salas, idos, fiestas = A.cargar(args, avisos)
+                    m.fiestas = fiestas
+                    m.cargar_gente(salas, idos)
+                    m.actualizar_contexto(forzar=True)
+                    r.clave_sup = None
+            if args.demo:
+                m.pausa_texto = reloj.texto if reloj.en_pausa() else None
+            t0 = time.perf_counter()
+            m.paso(dt)
+            t1 = time.perf_counter()
+            r.dibujar()
+            t2 = time.perf_counter()
+            medias[0] = medias[0] * 0.95 + (t1 - t0) * 50
+            medias[1] = medias[1] * 0.95 + (t2 - t1) * 50
+            if info:
+                txt = "%.0f fps · simulación %.1f ms · dibujo %.1f ms" % (clock.get_fps(), medias[0], medias[1])
+                pantalla.blit(r.letras.texto(txt, (255, 255, 160), 9, fondo=(20, 20, 20)), (6, 44))
+            if avisos:
+                pantalla.blit(r.letras.texto("Avisos: " + "; ".join(avisos)[:120], (30, 30, 30), 9,
+                                             fondo=(255, 225, 90)), (6, 44))
+            pygame.display.flip()
+
+    finally:
+        if m.estado is not None:   # lo excavado, los colores y dónde estaba cada hormiga
+            m.estado.guardar(m.hormigas.values())
 
 
 def main(argv=None):
@@ -194,4 +200,6 @@ def main(argv=None):
     if args.captura or args.medir:
         sin_pantalla(args)
     else:
+        # al parar el servicio (SIGTERM) se sale como con la q, guardando el estado
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
         con_pantalla(args)

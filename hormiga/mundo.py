@@ -8,7 +8,8 @@ from motor.colores import color
 from . import clima_real as CR
 from . import fiestas as F
 from . import tiempo as T
-from .hormigas import Hormiga
+from .estado import Estado
+from .hormigas import COLORES, Hormiga
 from .superficie import Superficie
 from .vida import Vida
 from .tierra import ANCHO, OBRAS, PROF, Plan
@@ -39,6 +40,10 @@ class Mundo:
         nombre = str(cfg["general"].get("nombre", "")).strip()
         self.de_quien = " de %s" % nombre if nombre else ""
         self.fundacion = _fecha(cfg["general"]["fundacion"])
+        # lo que sobrevive a los reinicios (local/estado.json); sólo con el reloj de verdad,
+        # nunca en la demo, con otra fecha ni al hacer capturas
+        self.estado = Estado(self.raiz, "%s-%s" % (self.fundacion, self.semilla)) \
+            if getattr(reloj, "real", False) else None
         self.unicode = True
         self.fiestas = fiestas
         self.t = 0.0
@@ -122,12 +127,30 @@ class Mundo:
             self.clima = CR.desde_config(self.cfg, self.raiz)
         return self.clima.actual() if self.clima else None
 
+    def cava_encendido(self):
+        """¿Las obras avanzan sólo mientras está en marcha? (no en demo ni con otra fecha)"""
+        modo = str(self.cfg.get("nido", {}).get("cavar", "encendido")).lower()
+        return modo == "encendido" and self.estado is not None
+
+    def _dia_obras(self):
+        """Hasta dónde llegan las obras, en días de trabajo: el tiempo que lleva el hormiguero
+        en marcha (guardado en local/estado.json), o los días desde la fundación."""
+        if not self.cava_encendido():
+            return self.dia
+        e = self.estado
+        e.avanzar(self.ahora)
+        for i, o in enumerate(self.plan.obras):   # apunta qué día se termina cada obra (para el diario)
+            if o.ini >= 0 and o.fin <= e.dias and e.acabar("%d %s" % (i, o.nombre), self.dia):
+                e.guardar(self.hormigas.values())
+        return e.dias
+
     def actualizar_contexto(self, forzar=False):
         self.ahora = self.reloj()
         hoy = self.ahora.date()
         inicio = datetime.datetime.combine(self.fundacion, datetime.time())
         self.dia = max(0.0, (self.ahora - inicio).total_seconds() / 86400)
-        self.plan.actualizar(self.dia)
+        self.dia_obras = self._dia_obras()
+        self.plan.actualizar(self.dia_obras)
         ciudad = self.cfg.get("ciudad", {})
         lat, lon = float(ciudad.get("lat", T.MALAGA[0])), float(ciudad.get("lon", T.MALAGA[1]))
         forzado = self.cfg.get("tiempo_forzado")
@@ -156,13 +179,13 @@ class Mundo:
         self.fiesta_mensaje = act[-1].mensaje if act else None
         self.gorro_fiesta = next((f.gorro for f in reversed(act) if f.gorro), None)
 
-        self.salas = self.plan.salas(self.dia)
+        self.salas = self.plan.salas(self.dia_obras)
         self.sala_por_clave = {s.clave: s for s in self.salas}
         self.sala_por_funcion = {}
         for s in self.salas:
             self.sala_por_funcion.setdefault(s.funcion, s)
-        self.frente = self.plan.frente(self.dia)
-        self.salidas_x_grid = self.plan.salidas(self.dia)
+        self.frente = self.plan.frente(self.dia_obras)
+        self.salidas_x_grid = self.plan.salidas(self.dia_obras)
         self.salidas_x = [self.ox + x for x in self.salidas_x_grid]
 
         # quién está y quién se ha ido
@@ -183,10 +206,17 @@ class Mundo:
         for n in list(self.hormigas):
             if n not in vivos:
                 del self.hormigas[n]
+        usados = [p["color"] for p in presentes if p.get("color")]
         for i, p in enumerate(presentes):
+            if not p.get("color") and self.estado is not None and not p.get("esqueleto"):
+                p = dict(p, color=self.estado.color(p["nombre"], usados, COLORES))
+                usados.append(p["color"])
             h = self.hormigas.get(p["nombre"])
             if h is None:
-                self.hormigas[p["nombre"]] = Hormiga(p, i, self)
+                h = self.hormigas[p["nombre"]] = Hormiga(p, i, self)
+                donde = self.estado.posiciones.get(p["nombre"]) if self.estado else None
+                if donde and self.plan.suelo_en(*donde):   # sigue donde estaba antes de reiniciar
+                    h.x, h.y = donde
             elif h.sala != p["sala"] or h.persona != p:
                 h.persona, h.sala = p, p["sala"]  # la han cambiado de sala
                 if p.get("color"):
@@ -334,6 +364,8 @@ class Mundo:
         self._espera_jefe -= dt
         if int(self.t) != int(self.t - dt):
             self._citas()
+            if self.estado is not None and self.estado.toca_guardar():
+                self.estado.guardar(self.hormigas.values())
         for h in self.hormigas.values():
             h.actualizar(self, dt)
         self.vida.actualizar(dt)
@@ -414,22 +446,29 @@ class Mundo:
         ev = []
         fundadores = [p["nombre"] for p in self.personas if not p["alta"] or p["alta"] <= self.fundacion]
         ev.append((0, 0, "Se funda el hormiguero%s: %s." % (self.de_quien, ", ".join(fundadores))))
-        for o in self.plan.obras:
-            if o.fin > self.dia or o.ini < 0:
+        ultima = None
+        for i, o in enumerate(self.plan.obras):
+            if o.fin > self.dia_obras or o.ini < 0:
                 continue
             d = int(o.fin)
+            if self.cava_encendido():   # cavando sólo encendido: el día en que de verdad se terminó
+                d = self.estado.acabadas.get("%d %s" % (i, o.nombre))
+                if d is None:
+                    continue
+            ultima = d
+            orden = d + 0.5 + o.fin / 10000   # dentro del día, en el orden en que se terminaron
             if o.tipo == "sala":
-                ev.append((d, o.fin, "Inauguran: %s." % o.sala.nombre))
+                ev.append((d, orden, "Inauguran: %s." % o.sala.nombre))
             elif o.tipo == "salida":
-                ev.append((d, o.fin, "Abren una segunda salida a la superficie."))
+                ev.append((d, orden, "Abren una segunda salida a la superficie."))
             elif o.tipo == "rampa":
-                ev.append((d, o.fin, "Terminan %s." % o.nombre))
+                ev.append((d, orden, "Terminan %s." % o.nombre))
             if o.roca:
-                ev.append((d, o.fin - 0.01, "¡Han atravesado una roca!"))
+                ev.append((d, orden - 0.001, "¡Han atravesado una roca!"))
             if o.objeto:
-                ev.append((d, o.fin + 0.01, "Hallazgo: %s." % o.objeto[2]))
-        if self.plan.sin_sitio and self.dia > 330:
-            ev.append((330, 330, "Ya no cabe nada más en el hormiguero: se quedan sin hacer %s."
+                ev.append((d, orden + 0.001, "Hallazgo: %s." % o.objeto[2]))
+        if self.plan.sin_sitio and ultima is not None and self.plan.obras[-1].fin <= self.dia_obras:
+            ev.append((ultima, ultima + 0.9, "Ya no cabe nada más en el hormiguero: se quedan sin hacer %s."
                        % ", ".join(self.plan.sin_sitio)))
         for s in self.plan.salas_todas:
             for mu in self.muebles_de(s):

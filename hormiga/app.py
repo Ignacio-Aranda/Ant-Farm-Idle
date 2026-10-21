@@ -6,6 +6,7 @@ import time
 
 from motor.sprites import cargar_toml
 
+from . import estado as E
 from . import fiestas as F
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -42,15 +43,26 @@ def cargar_tipos(carpeta, avisos):
 
 def cargar(args, avisos):
     cfg = {k: dict(v) for k, v in POR_DEFECTO.items()}
+    general_usuario = {}
     if os.path.exists(args.config):
         try:
-            for k, v in cargar_toml(args.config).items():
+            usuario = cargar_toml(args.config)
+            general_usuario = usuario.get("general", {})
+            for k, v in usuario.items():
                 if isinstance(v, dict):
                     cfg.setdefault(k, {}).update(v)
                 else:
                     cfg[k] = v
         except Exception as e:
             avisos.append("config: %s" % e)
+    # sin fundación o sin semilla en config.toml: las del primer arranque (local/estado.json)
+    falta_f, falta_s = "fundacion" not in general_usuario, "semilla" not in general_usuario
+    if falta_f or falta_s:
+        fundacion, semilla = E.inicio(RAIZ, falta_f, falta_s)
+        if falta_f and fundacion:
+            cfg["general"]["fundacion"] = fundacion
+        if falta_s and semilla:
+            cfg["general"]["semilla"] = semilla
     tipos = cargar_tipos(args.tipos, avisos)
     cfg["tipos"] = tipos
     cfg["raiz"] = RAIZ
@@ -188,7 +200,10 @@ def crear_reloj(args, cfg, fiestas=None, salas=None, idos=None):
         inicio = (inicio or datetime.datetime.now()).replace(hour=h, minute=m, second=0)
     factor = args.acelerar
     if inicio is None and factor == 1.0:
-        return datetime.datetime.now
+        def ahora():
+            return datetime.datetime.now()
+        ahora.real = True   # la hora de verdad: el estado se guarda y las obras cuentan
+        return ahora
     base = inicio or datetime.datetime.now()
     t0 = time.monotonic()
     return lambda: base + datetime.timedelta(seconds=(time.monotonic() - t0) * factor)

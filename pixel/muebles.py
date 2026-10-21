@@ -155,7 +155,7 @@ def estanteria(s, x, suelo, r, c, libros=True):
 def vitrina(s, x, suelo, r, c):
     estanteria(s, x, suelo, r, c, libros=False)
     m = c.render.m
-    hallados = [o for o in m.plan.objetos if o[5] <= m.dia]
+    hallados = [o for o in m.plan.objetos if o[5] <= m.dia_obras]
     for i, (_x, _y, nombre, _icono, col, _d) in enumerate(hallados[c.indice * 6:c.indice * 6 + 6]):
         ex = x + 3 + (i % 2) * 9
         yy = suelo - 27 + (i // 2) * 9

@@ -133,6 +133,24 @@ Con `esqueletos = true` en `[halloween]`, del 26 al 31 de octubre los que se fue
 (`idos.toml`) salen del cementerio y se pasean por el hormiguero como hormigas
 esqueleto, también de noche.
 
+## Reinicios y apagones
+
+La primera vez que arranca (con la hora de verdad, no en `--demo` ni con `--fecha`)
+crea `local/estado.json`, y en cada arranque lo vuelve a leer, así que reiniciar la Pi
+o el servicio no cambia nada:
+
+- **El color de cada hormiga** que no tiene uno fijo se elige una vez (el menos usado) y
+  ya no cambia, aunque entre o se vaya gente.
+- **Dónde estaba cada hormiga**: al volver, sigue en el mismo sitio.
+- **La fecha de fundación y la semilla**, si no están en `config.toml`: la fundación es
+  el día del primer arranque y la semilla se elige al azar una sola vez.
+- **Lo excavado.** Con `cavar = "encendido"` en `[nido]` (lo normal), las hormigas sólo
+  cavan mientras el hormiguero está en marcha: una semana apagado es una semana sin
+  obras. Con `cavar = "fecha"`, las obras avanzan con los días aunque esté apagado.
+
+Se guarda cada minuto y al pararlo. Para empezar un hormiguero de cero, borra
+`local/estado.json`.
+
 ## En una Raspberry Pi
 
 Pensado para una Raspberry Pi 3 o más nueva con **Raspberry Pi OS Lite** (sin

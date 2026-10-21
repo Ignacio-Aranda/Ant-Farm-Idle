@@ -769,7 +769,7 @@ class Render:
             s.blit(t, (cx + 4, r.y + 1))
         # hallazgos
         for x, y, nombre, icono, col, dia in m.plan.objetos:
-            if dia <= m.dia:
+            if dia <= m.dia_obras:
                 self._objeto(s, self.px(m.ox + x), y * CH + 2, nombre, rgb(col))
 
     def _objeto(self, s, x, y, nombre, col):

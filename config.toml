@@ -2,8 +2,12 @@
 
 [general]
 nombre = "la Oficina"      # sale en el diario: «Se funda el hormiguero de la Oficina: ...»
-fundacion = "2026-01-01"   # día 0: el hormiguero crece a partir de esta fecha
-semilla = 2026             # cambia el número para otro trazado de túneles
+# fundacion: el día 0 del hormiguero. Si no la pones, es el día en que se arranca por
+#   primera vez (se guarda en local/estado.json y ya no cambia).
+# fundacion = "2026-01-01"
+# semilla: el número del que sale el trazado de los túneles y la colocación de las salas.
+#   Si no la pones, se elige una al azar la primera vez y se guarda.
+# semilla = 2026
 fps_pixel = 20             # fotogramas por segundo de la versión gráfica
 
 [ciudad]
@@ -30,6 +34,10 @@ jornada = "09:00-18:00"    # quien es jefe sólo llama al despacho en este horar
 
 [nido]
 entrada = 20               # columna preferida para la entrada (de 3 a 156)
+# cavar = "encendido": las obras sólo avanzan mientras el hormiguero está en marcha (lo que
+#   llevan se guarda en local/estado.json). Una semana apagado, una semana sin obras.
+# cavar = "fecha": avanzan con los días desde la fundación, esté encendido o no.
+cavar = "encendido"
 # Salas que excavan a lo largo del año, en orden (cada una usa el tipo de su nombre):
 obras = ["despensa", "museo", "hongos", "almacen", "biblioteca"]
 
