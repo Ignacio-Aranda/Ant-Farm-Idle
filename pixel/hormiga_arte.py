@@ -53,8 +53,26 @@ def _cuerpo(s, color, dormida=False):
         pygame.draw.line(s, d, (22, hy), (25, hy + 1))
 
 
-def _patas(s, color, fase):
-    c = oscuro(color, 0.55)
+HUESO = (226, 222, 204)
+NEGRO = (30, 28, 34)
+
+
+def _huesos(s, dormida=False):
+    """Encima de un cuerpo negro: costillas, columna y una calavera con las cuencas vacías."""
+    for x in (3, 5, 7, 9):
+        pygame.draw.line(s, HUESO, (x, 5), (x, 8))
+    pygame.draw.line(s, HUESO, (2, 6), (10, 6))
+    pygame.draw.line(s, HUESO, (11, 6), (18, 6))
+    hy = 5 if dormida else 3
+    pygame.draw.ellipse(s, HUESO, (19, hy + 1, 6, 5))
+    s.set_at((22, hy + 2), (10, 10, 10))
+    s.set_at((23, hy + 2), (10, 10, 10))
+    for x in (21, 23):
+        s.set_at((x, hy + 5), (10, 10, 10))
+
+
+def _patas(s, color, fase, c=None):
+    c = c or oscuro(color, 0.55)
     for i, hx in enumerate(CADERAS):
         ph = fase + (0 if i % 2 == 0 else math.pi)  # trípode: 1ª y 3ª juntas
         dx = round(2.5 * math.sin(ph)) + (-1 if i == 0 else 1 if i == 2 else 0)
@@ -65,24 +83,34 @@ def _patas(s, color, fase):
         pygame.draw.line(s, c, rod, pie)
 
 
-def fotogramas(color):
-    """{(dirección, clave): Surface}; claves 0-3 (andar), 'quieta' y 'dormida'."""
+def fotogramas(color, esqueleto=False):
+    """{(dirección, clave): Surface}; claves 0-3 (andar), 'quieta' y 'dormida'.
+    esqueleto: una hormiga negra con los huesos a la vista (para Halloween)."""
+    if esqueleto:
+        color = NEGRO
+    patas = HUESO if esqueleto else None
     out = {}
     for i in range(4):
         s = superficie(ANCHO, ALTO)
-        _patas(s, color, i * math.pi / 2)
+        _patas(s, color, i * math.pi / 2, patas)
         _cuerpo(s, color)
+        if esqueleto:
+            _huesos(s)
         out[(1, i)] = s
         out[(-1, i)] = espejo(s)
     q = superficie(ANCHO, ALTO)
-    _patas(q, color, math.pi / 2)
+    _patas(q, color, math.pi / 2, patas)
     _cuerpo(q, color)
+    if esqueleto:
+        _huesos(q)
     out[(1, "quieta")] = q
     out[(-1, "quieta")] = espejo(q)
     d = superficie(ANCHO, ALTO)
-    c = oscuro(color, 0.55)
+    c = patas or oscuro(color, 0.55)
     pygame.draw.line(d, c, (12, 12), (20, 12))
     _cuerpo(d, color, dormida=True)
+    if esqueleto:
+        _huesos(d, dormida=True)
     out[(1, "dormida")] = d
     out[(-1, "dormida")] = espejo(d)
     return out

@@ -49,6 +49,8 @@ def argumentos(argv=None):
     p.add_argument("--seg-dia", type=float, default=4.0)
     p.add_argument("--pausa", type=float, default=5.0)
     p.add_argument("--semilla", type=int)
+    p.add_argument("--tiempo", choices=("despejado", "nublado", "lluvia", "tormenta", "nieve", "calima"),
+                   help="forzar el tiempo (para probar o hacer capturas)")
     p.add_argument("--fps", type=float, default=None, help="fotogramas por segundo (por defecto 20)")
     p.add_argument("--ventana", action="store_true", help="en ventana en vez de pantalla completa")
     p.add_argument("--captura", metavar="PNG", help="sin pantalla: simula y guarda una imagen")
@@ -68,6 +70,8 @@ def preparar(args):
         cfg["general"]["semilla"] = random.randrange(1, 100000)
     from .base import ajustar_textos
     ajustar_textos(cfg)
+    if getattr(args, "tiempo", None):
+        cfg["tiempo_forzado"] = args.tiempo
     return A, cfg, salas, idos, fiestas, avisos
 
 

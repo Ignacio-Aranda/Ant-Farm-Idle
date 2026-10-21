@@ -137,6 +137,29 @@ class TiempoDelDia:
         return media + fase * OSCILACION[mes] / 2
 
 
+class TiempoForzado:
+    """Un tiempo fijo elegido a mano (--tiempo), para probar o hacer capturas."""
+
+    TIPOS = ("despejado", "nublado", "lluvia", "tormenta", "nieve", "calima")
+    terral = False
+
+    def __init__(self, tipo, temperatura=None):
+        self.tipo = tipo
+        self.llueve = tipo in ("lluvia", "tormenta")
+        self.tormenta = tipo == "tormenta"
+        self.nieve = tipo == "nieve"
+        self.calima = tipo == "calima"
+        self.nubes = {"despejado": 0.05, "calima": 0.1}.get(tipo, 0.9)
+        self.temp = temperatura if temperatura is not None else {"nieve": -1.0}.get(tipo, 15.0)
+        self.sol = None
+
+    def lluvia(self, minuto):
+        return {"lluvia": 0.6, "tormenta": 0.9, "nieve": 0.6}.get(self.tipo, 0.0)
+
+    def temperatura(self, minuto):
+        return self.temp
+
+
 _CACHE = {}
 
 

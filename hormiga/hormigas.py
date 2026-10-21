@@ -51,6 +51,7 @@ class Hormiga:
     def __init__(self, persona, indice, m):
         self.persona = persona
         self.nombre = persona["nombre"]
+        self.esqueleto = bool(persona.get("esqueleto"))   # Halloween: vuelve uno que se fue
         self.sala = persona.get("sala")
         self.color = color(persona.get("color") or COLORES[indice % len(COLORES)])
         self.rng = random.Random("hormiga-%s-%s-%s" % (m.semilla, self.nombre, m.t))
@@ -154,6 +155,12 @@ class Hormiga:
             return self.ir(m, destino, act, carga)
         casa = self.sala_propia(m)
 
+        if m.de_noche and self.esqueleto:   # los esqueletos no duermen: rondan por todas partes
+            if rng.random() < 0.5:
+                return self.ir(m, (rng.randrange(4, m.plan_ancho - 4), -1), "rondar")
+            s = rng.choice(m.salas) if m.salas else casa
+            if s:
+                return self.ir(m, m.punto_libre(s, rng, self), "rondar")
         if m.de_noche:
             if rng.random() < 0.9 and casa:
                 self.durmiendo = True

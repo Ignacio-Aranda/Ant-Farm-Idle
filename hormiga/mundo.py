@@ -1,6 +1,7 @@
 """El hormiguero completo: une la tierra, la superficie y las hormigas."""
 
 import datetime
+import random
 
 from motor.colores import color
 
@@ -129,14 +130,17 @@ class Mundo:
         self.plan.actualizar(self.dia)
         ciudad = self.cfg.get("ciudad", {})
         lat, lon = float(ciudad.get("lat", T.MALAGA[0])), float(ciudad.get("lon", T.MALAGA[1]))
-        real = self._tiempo_real()
-        self.tiempo_hoy = real or T.tiempo_del_dia(hoy, self.semilla)
+        forzado = self.cfg.get("tiempo_forzado")
+        real = None if forzado else self._tiempo_real()
+        self.tiempo_hoy = (T.TiempoForzado(forzado) if forzado else real) or T.tiempo_del_dia(hoy, self.semilla)
         self.sol_hoy = (real and real.sol) or T.sol(hoy, lat, lon, ciudad.get("zona_horaria"))
         mins = self.ahora.hour * 60 + self.ahora.minute
         a, p = self.sol_hoy
         self.de_noche = not (a <= mins < p)
         self.lluvia = self.tiempo_hoy.lluvia(mins)
         self.nieve = self.tiempo_hoy.nieve and self.lluvia > 0
+        # nieve en el suelo: mientras nieva y hasta un día después (si no hace calor)
+        self.nevado = self.nieve or bool(real and self.clima.nevo_hace(24) and self.tiempo_hoy.temp < 5)
         self.temperatura = self.tiempo_hoy.temperatura(mins)
         self.estacion = T.estacion(hoy, sur=lat < 0)
         if forzar or int(self.t) % 30 == 0:
@@ -172,6 +176,10 @@ class Mundo:
         e = self.plan.entrada
         self.x_cumple = e + 30 if e + 30 + 20 <= ANCHO - 3 else max(3, e - 50)
         vivos = {p["nombre"] for p in presentes}
+        # Halloween: los que se fueron vuelven como hormigas esqueleto (del 26 al 31 de octubre)
+        for p in self.esqueletos(hoy, idos_hoy):
+            vivos.add(p["nombre"])
+            presentes.append(p)
         for n in list(self.hormigas):
             if n not in vivos:
                 del self.hormigas[n]
@@ -349,6 +357,8 @@ class Mundo:
         for d in self.idos_cfg:
             if d["fecha"] == f:
                 ev.append((k, k + 0.2, "%s se va del hormiguero. Gone, but not forgotten." % d["nombre"]))
+        if (f.month, f.day) == (10, 26) and self.idos_cfg and self.cfg.get("halloween", {}).get("esqueletos"):
+            ev.append((k, k + 0.2, "¡Los que se fueron salen del cementerio! Pasearán por aquí hasta Halloween."))
         tdia = self._tiempo_de(f)
         if tdia is None:
             return ev, seco
@@ -367,6 +377,20 @@ class Mundo:
         if tdia.terral:
             ev.append((k, k + 0.3, "Terral. Hace un calor que derrite."))
         return ev, seco
+
+    def esqueletos(self, hoy, idos_hoy):
+        """Con [halloween] esqueletos = true, del 26 al 31 de octubre los que se fueron vuelven."""
+        if not self.cfg.get("halloween", {}).get("esqueletos", False):
+            return []
+        if not (hoy.month == 10 and 26 <= hoy.day <= 31):
+            return []
+        casas = [s.clave for s in self.plan.salas_todas if s.principal] or [None]
+        out = []
+        for d in idos_hoy:
+            nombre = d["nombre"]
+            rng = random.Random("esqueleto-%s" % nombre)
+            out.append({"nombre": nombre + " ☠", "sala": rng.choice(casas), "esqueleto": True, "alta": None})
+        return out
 
     def _tiempo_de(self, fecha):
         """Cómo fue el tiempo de un día: lo apuntado de OpenWeather si se usa, si no el de respaldo."""
@@ -404,6 +428,9 @@ class Mundo:
                 ev.append((d, o.fin - 0.01, "¡Han atravesado una roca!"))
             if o.objeto:
                 ev.append((d, o.fin + 0.01, "Hallazgo: %s." % o.objeto[2]))
+        if self.plan.sin_sitio and self.dia > 330:
+            ev.append((330, 330, "Ya no cabe nada más en el hormiguero: se quedan sin hacer %s."
+                       % ", ".join(self.plan.sin_sitio)))
         for s in self.plan.salas_todas:
             for mu in self.muebles_de(s):
                 d = mu.get("aparece", mu.get("dia", 0))

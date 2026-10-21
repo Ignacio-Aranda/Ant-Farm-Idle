@@ -64,3 +64,8 @@ x = 89
 [[paisaje.fondo]]
 pieza = "catedral"
 x = 58
+
+[halloween]
+# Del 26 al 31 de octubre, los que se fueron (idos.toml) salen del cementerio y se pasean
+# por el hormiguero como hormigas esqueleto.
+esqueletos = true

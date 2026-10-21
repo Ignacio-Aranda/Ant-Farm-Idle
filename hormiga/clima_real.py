@@ -78,6 +78,7 @@ class OpenWeather:
         self.datos, self.hora = None, 0.0
         self.historial = {}          # "AAAA-MM-DD" -> {"llueve": ..., "tormenta": ..., ...}
         self.ultima_lluvia = None    # marca de tiempo de la última vez que llovía
+        self.ultima_nieve = None
         self.error = None
         self._leer()
         threading.Thread(target=self._bucle, daemon=True, name="openweather").start()
@@ -91,6 +92,7 @@ class OpenWeather:
             self.datos, self.hora = d.get("datos"), float(d.get("hora", 0))
             self.historial = d.get("historial", {})
             self.ultima_lluvia = d.get("ultima_lluvia")
+            self.ultima_nieve = d.get("ultima_nieve")
         except (OSError, ValueError):
             pass
 
@@ -100,7 +102,7 @@ class OpenWeather:
             tmp = self.ruta + ".tmp"
             with open(tmp, "w") as f:
                 json.dump({"datos": self.datos, "hora": self.hora, "historial": self.historial,
-                           "ultima_lluvia": self.ultima_lluvia}, f)
+                           "ultima_lluvia": self.ultima_lluvia, "ultima_nieve": self.ultima_nieve}, f)
             os.replace(tmp, self.ruta)
         except OSError:
             pass
@@ -135,6 +137,8 @@ class OpenWeather:
             dia["tmax"] = max(dia.get("tmax", real.temp), real.temp)
             if real.llueve or real.nieve:
                 self.ultima_lluvia = ahora
+            if real.nieve:
+                self.ultima_nieve = ahora
             # sólo se guardan los dos últimos años
             for vieja in sorted(self.historial)[:-730]:
                 del self.historial[vieja]
@@ -154,6 +158,9 @@ class OpenWeather:
 
     def llovio_hace(self, horas):
         return self.ultima_lluvia is not None and time.time() - self.ultima_lluvia < horas * 3600
+
+    def nevo_hace(self, horas):
+        return self.ultima_nieve is not None and time.time() - self.ultima_nieve < horas * 3600
 
     def dia(self, fecha):
         """Lo que se apuntó de ese día (o None si no se sabe)."""

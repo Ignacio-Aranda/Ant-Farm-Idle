@@ -320,7 +320,7 @@ class Render:
 
     def _montes(self):
         m = self.m
-        clave = (m.de_noche, m.tiempo_hoy.calima)
+        clave = (m.de_noche, m.tiempo_hoy.calima, m.nevado)
         if clave != self.clave_montes:
             self.clave_montes = clave
             s = superficie(self.W, self.G)
@@ -339,6 +339,13 @@ class Render:
             pts.append((self.W, self.G))
             if m.superficie.montes_lejos:
                 pygame.draw.polygon(s, lejos, pts)
+                if m.nevado:   # nieve sólo en las cumbres (la parte más alta de los montes)
+                    nieve = (150, 160, 190) if m.de_noche else (240, 244, 250)
+                    cima = min(y for _, y in pts[1:-1])
+                    corte = cima + (self.G - cima) * 0.35
+                    for x, y in pts[1:-1]:
+                        if y < corte:
+                            pygame.draw.line(s, nieve, (x, y), (x, int(min(corte, y + 10))), 4)
             # colinas más cerca
             r = random.Random(m.semilla)
             pts = [(0, self.G)]
@@ -374,7 +381,7 @@ class Render:
     def _clave_superficie(self):
         m = self.m
         return (m.ahora.date(), m.de_noche, frozenset(m.decoraciones), tuple(m.cumples), tuple(m.idos),
-                tuple(m.salidas_x), m.plan.total_cavado() // 600, m.llovio_semana)
+                tuple(m.salidas_x), m.plan.total_cavado() // 600, m.llovio_semana, m.nevado)
 
     def _superficie(self):
         clave = self._clave_superficie()
@@ -383,6 +390,10 @@ class Render:
             s = superficie(self.W, self.G + 4)
             self._pintar_superficie(s)
             m = self.m
+            if m.nevado:
+                _nevar(s, self.G)
+            for img, pos in self._textos_superficie:   # los letreros, encima de la nieve
+                s.blit(img, pos)
             if m.de_noche:
                 s = multiplicar(s, (110, 120, 170))
                 # de noche se encienden las ventanas y las farolas
@@ -396,6 +407,7 @@ class Render:
 
     def _pintar_superficie(self, s):
         m = self.m
+        self._textos_superficie = []
         sup = m.superficie
         G = self.G
         dia = m.ahora.timetuple().tm_yday
@@ -500,7 +512,7 @@ class Render:
         for k in range(0, ancho_px + 1, 6):
             pygame.draw.line(s, (120, 90, 60), (x0 + k, G - 8), (x0 + k, G))
         rip = self.letras.texto("R.I.P.", (200, 200, 205), 8)
-        s.blit(rip, (x0 + ancho_px // 2 - rip.get_width() // 2, G - 34))
+        self._textos_superficie.append((rip, (x0 + ancho_px // 2 - rip.get_width() // 2, G - 34)))
         cx = x0 + 8
         for nombre, w in zip(m.idos, anchos):
             ancho = self.px(w) - 2
@@ -530,7 +542,7 @@ class Render:
         m = self.m
         est = m.estacion
         fase = int(t * 2) % 3
-        clave = (est, fase, m.de_noche)
+        clave = (est, fase, m.de_noche, m.nevado)
         s = self.hierba.get(clave)
         if s is None:
             s = superficie(self.W, 10)
@@ -545,6 +557,10 @@ class Render:
                     c = (190, 170, 90)
                 pygame.draw.line(s, c, (x, 9), (x + dx, 9 - h))
             pygame.draw.line(s, (70, 50, 32), (0, 9), (self.W, 9))
+            if m.nevado:   # una capa de nieve con algún bulto
+                for x in range(0, self.W, 3):
+                    h = 3 + (r.random() < 0.3)
+                    s.fill((236, 240, 248), (x, 9 - h, 3, h + 1))
             if m.de_noche:
                 s = multiplicar(s, (110, 120, 170))
             self.hierba[clave] = s
@@ -1224,8 +1240,13 @@ class Render:
         etiquetas = []
         gorro_fiesta = m.gorro_fiesta
         for h in m.hormigas.values():
-            col = rgb_desde(h.color)
-            fr = self.hormiga(col)
+            if getattr(h, "esqueleto", False):
+                col = HA.HUESO
+                fr = self.cache_hormigas.get("esqueleto") or self.cache_hormigas.setdefault(
+                    "esqueleto", HA.fotogramas(None, esqueleto=True))
+            else:
+                col = rgb_desde(h.color)
+                fr = self.hormiga(col)
             gx, gy = h.x, h.y
             if h.ruta and not h.escoltando:  # entre celda y celda, movimiento suave
                 nx, ny = h.ruta[0]
@@ -1397,6 +1418,22 @@ def rgb_desde(c):
 
 def _color_de(c):
     return c.c256 if hasattr(c, "c256") else c
+
+
+def _nevar(s, suelo):
+    """Pone nieve encima de todo lo que hay pintado en la capa (árboles, tejados, lápidas...):
+    en cada columna, unos píxeles blancos sobre el primer píxel opaco que se encuentra."""
+    mascara = pygame.mask.from_surface(s)
+    w, h = s.get_size()
+    blanco, sombra = (240, 244, 250), (200, 210, 228)
+    for x in range(w):
+        for y in range(0, min(h, suelo)):
+            if mascara.get_at((x, y)):
+                grosor = 2 + (x * 7 % 5 == 0)
+                for k in range(grosor):
+                    if y + k < h and mascara.get_at((x, y + k)):
+                        s.set_at((x, y + k), blanco if k < grosor - 1 else sombra)
+                break
 
 
 def _color_gato(b):

@@ -316,37 +316,65 @@ class Plan:
 
     # ------------------------------------------------------- las obras del año
 
+    def _hueco_obra(self, ancho):
+        """(planta, x0, celdas de galería) del primer hueco para una sala nueva, o None."""
+        for n in sorted(range(1, self.hondo + 1), key=lambda n: -n):
+            for intento in (self.lado, -self.lado):
+                a, b = self.tramo[n]
+                # el primer hueco libre a ese lado de la galería
+                xs = range(b + 1, ANCHO) if intento == 1 else range(a - ancho, -1, -1)
+                x0 = next((x for x in xs if self._libre(n, x, x + ancho - 1)), None)
+                if x0 is not None:
+                    gal = galeria(b + 1, x0 + ancho - 1, PISOS[n]) if intento == 1 else galeria(a - 1, x0, PISOS[n])
+                    self.tramo[n] = _unir(self.tramo[n], (x0, x0 + ancho - 1))
+                    self.lado = -self.lado
+                    return n, x0, gal
+        return None
+
+    def _bajar_planta(self, obras):
+        """Excava una rampa hasta la siguiente planta (vacía). False si no hay por dónde."""
+        n = self.hondo
+        x, x2, _ = self._elegir_rampa(n, n + 1, 0, 0)
+        if self.rampa_mala == n + 1:
+            self.rampa_mala = None
+            return False
+        a, b = self.tramo[n]
+        if not a <= x <= b:   # primero alargan la galería hasta donde empieza la rampa
+            obras.append(Obra("galeria", "la galería de la planta %d" % n,
+                              galeria(b, x, PISOS[n]) if x > b else galeria(a, x, PISOS[n])))
+            self.tramo[n] = _unir(self.tramo[n], (x, x))
+        obras.append(Obra("rampa", "la rampa a la planta %d" % (n + 1), rampa(x, PISOS[n], x2, PISOS[n + 1])))
+        self._ocupar(n, x, x2)
+        self._ocupar(n + 1, x, x2)
+        self.tramo[n + 1] = (x2, x2)
+        self.hondo = n + 1
+        return True
+
     def _montar_obras(self, dias):
         rng = self.rng
         obras = []
-        # salas nuevas, al lado de las galerías que ya hay (mejor en las plantas de abajo)
-        lado = -1
+        # salas nuevas, al lado de las galerías que ya hay (mejor en las plantas de abajo).
+        # Si no caben: abren una planta más honda con una rampa nueva, o la hacen más estrecha.
+        self.lado = -1
+        self.sin_sitio = []
         for d in self.salas_obras:
             ancho = int(d.get("ancho", 22))
-            hecho = False
-            for n in sorted(range(1, self.hondo + 1), key=lambda n: -n):
-                for intento in (lado, -lado):
-                    a, b = self.tramo[n]
-                    # el primer hueco libre a ese lado de la galería
-                    xs = range(b + 1, ANCHO) if intento == 1 else range(a - ancho, -1, -1)
-                    x0 = next((x for x in xs if self._libre(n, x, x + ancho - 1)), None)
-                    if x0 is not None:
-                        gal = galeria(b + 1, x0 + ancho - 1, PISOS[n]) if intento == 1 else \
-                            galeria(a - 1, x0, PISOS[n])
-                        self.tramo[n] = _unir(self.tramo[n], (x0, x0 + ancho - 1))
-                        hecho = True
-                        break
-                if hecho:
-                    break
-            if not hecho:
+            hueco = self._hueco_obra(ancho)
+            while hueco is None and self.hondo < len(PISOS) - 1 and self._bajar_planta(obras):
+                hueco = self._hueco_obra(ancho)
+            while hueco is None and ancho > 14:
+                ancho -= 4
+                hueco = self._hueco_obra(ancho)
+            if hueco is None:
+                self.sin_sitio.append(d["nombre"])
                 continue
+            n, x0, gal = hueco
             sala = Sala(d["clave"], d["nombre"], x0, PISOS[n], ancho)
             sala.tipo, sala.funcion, sala.nivel = d.get("tipo", d["clave"]), d.get("funcion", d["clave"]), n
             self._ocupar(n, x0, x0 + ancho - 1)
             obras.append(Obra("galeria", "la galería de la planta %d" % n, gal))
             obras.append(Obra("sala", d["nombre"], sala_celdas(sala), sala))
             self.salas_todas.append(sala)
-            lado = -lado
         # segunda salida: desde la galería de la planta 1 hacia arriba, lejos de la entrada
         a, b = self.tramo[1]
         largo = 2 * PISOS[1]
