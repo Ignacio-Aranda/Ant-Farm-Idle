@@ -1,50 +1,18 @@
-"""Arranque, reloj (real o simulado) y bucle principal."""
+"""Carga de la configuración y reloj (real o simulado)."""
 
-import argparse
 import datetime
-import locale
 import os
-import random
-import sys
 import time
-import unicodedata
 
-from motor.colores import Fondo, color
-from motor.pantalla import PantallaHTML
 from motor.sprites import cargar_toml
 
 from . import fiestas as F
-from .mundo import Mundo
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 POR_DEFECTO = {
     "general": {"fps": 8, "fundacion": "2026-10-14", "semilla": 2026, "unicode": "auto"},
 }
-
-
-def argumentos(argv=None):
-    p = argparse.ArgumentParser(prog="hormiguero", description="Ant Farm Idle para la terminal.")
-    p.add_argument("-c", "--config", default=os.path.join(RAIZ, "config.toml"))
-    p.add_argument("--salas", default=os.path.join(RAIZ, "salas"))
-    p.add_argument("--idos", default=os.path.join(RAIZ, "idos.toml"))
-    p.add_argument("--calendario", default=os.path.join(RAIZ, "calendario.toml"))
-    p.add_argument("--fecha", help="simular una fecha AAAA-MM-DD")
-    p.add_argument("--hora", help="simular una hora HH:MM")
-    p.add_argument("--dias", type=float, help="ver el hormiguero N días después de la fundación")
-    p.add_argument("--acelerar", type=float, default=1.0,
-                   help="el tiempo corre N veces más rápido (p. ej. 3600 = 1 hora por segundo)")
-    p.add_argument("--demo", action="store_true",
-                   help="modo demostración: semilla aleatoria, un año a toda velocidad y "
-                        "pausa de 5 s en cada fecha importante")
-    p.add_argument("--seg-dia", type=float, default=4.0,
-                   help="en --demo, segundos reales que dura cada día (por defecto 4)")
-    p.add_argument("--pausa", type=float, default=5.0, help="en --demo, segundos de pausa")
-    p.add_argument("--semilla", type=int, help="semilla del trazado (por defecto la de config.toml)")
-    p.add_argument("--captura", metavar="HTML", help="sin terminal: guarda una captura en HTML")
-    p.add_argument("--tamano", default="160x62", help="tamaño para --captura")
-    p.add_argument("--segundos", type=float, default=10)
-    return p.parse_args(argv)
 
 
 def cargar(args, avisos):
@@ -202,113 +170,3 @@ for _grupo, _ascii in (("─═━▬", "-"), ("│║┃", "|"), ("┌┐└┘
     for _c in _grupo:
         _CAJAS[ord(_c)] = _ascii
 
-
-def a_ascii(t):
-    t = t.translate(_CAJAS)
-    return unicodedata.normalize("NFKD", t).encode("ascii", "ignore").decode()
-
-
-def sin_terminal(args):
-    avisos = []
-    cfg, salas, idos, fiestas = cargar(args, avisos)
-    w, h = (int(v) for v in args.tamano.lower().split("x"))
-    p = PantallaHTML(w, h)
-    reloj = crear_reloj(args, cfg)
-    simulado = [reloj()]
-    fps = float(cfg["general"]["fps"])
-    m = Mundo(cfg, salas, idos, fiestas, p, lambda: simulado[0], avisos)
-    t0 = time.perf_counter()
-    pasos = int(args.segundos * fps)
-    for _ in range(pasos):
-        simulado[0] += datetime.timedelta(seconds=args.acelerar / fps)
-        m.paso(1 / fps)
-    m.dibujar()
-    print("%.2f ms/fotograma" % ((time.perf_counter() - t0) / max(1, pasos) * 1000))
-    for a in avisos:
-        print("aviso:", a)
-    with open(args.captura, "w", encoding="utf-8") as f:
-        f.write(p.a_html("Hormiguero"))
-
-
-def _bucle(scr, args):
-    import curses
-    from motor.pantalla import PantallaCurses
-    try:
-        curses.curs_set(0)
-    except curses.error:
-        pass
-    scr.nodelay(True)
-    scr.keypad(True)
-    avisos = []
-    cfg, salas, idos, fiestas = cargar(args, avisos)
-    if args.semilla is not None:
-        cfg["general"]["semilla"] = args.semilla
-    elif args.demo:
-        cfg["general"]["semilla"] = random.randrange(1, 100000)
-    p = PantallaCurses(scr)
-    uni = str(cfg["general"].get("unicode", "auto")).lower()
-    unicode_ok = uni in ("si", "sí", "true") or (uni == "auto" and "UTF" in locale.getpreferredencoding(False).upper())
-    if not unicode_ok:
-        poner = p.poner
-        p.poner = lambda y, x, t, fg, f: poner(y, x, t if t.isascii() else a_ascii(t), fg, f)
-    reloj = crear_reloj(args, cfg, fiestas, salas, idos)
-    m = Mundo(cfg, salas, idos, fiestas, p, reloj, avisos)
-    m.unicode = unicode_ok
-    if args.demo:
-        m.contexto_cada = 0.25
-        m.demo_texto = "DEMO · semilla %s · un día cada %g s" % (cfg["general"]["semilla"], args.seg_dia)
-    fps = max(2.0, float(cfg["general"]["fps"]))
-    anterior = time.monotonic()
-    fondo_cielo = None
-    huella = firma(args)
-    revisado = time.monotonic()
-    while True:
-        ahora = time.monotonic()
-        dt = min(0.5, ahora - anterior)
-        anterior = ahora
-        k = scr.getch()
-        while k != -1:
-            if k in (ord("q"), ord("Q")):
-                return
-            if k == curses.KEY_RESIZE:
-                curses.update_lines_cols()
-                p.actualizar_tamano()
-                m.construir()
-            k = scr.getch()
-        if ahora - revisado > 3:
-            revisado = ahora
-            nueva = firma(args)
-            if nueva != huella:
-                huella = nueva
-                avisos.clear()
-                cfg2, salas, idos, fiestas = cargar(args, avisos)
-                m.fiestas = fiestas
-                m.cargar_gente(salas, idos)
-                m.actualizar_contexto(forzar=True)
-        if args.demo:
-            m.pausa_texto = reloj.texto if reloj.en_pausa() else None
-        m.paso(dt)
-        if m.fondo_cielo != fondo_cielo:
-            fondo_cielo = m.fondo_cielo
-            scr.clear()
-        m.dibujar()
-        if avisos:
-            p.poner(0, 0, (" Avisos: " + "; ".join(avisos))[:p.ancho - 1], color("negro"), Fondo(229, 3))
-        p.mostrar()
-        espera = 1 / fps - (time.monotonic() - ahora)
-        if espera > 0:
-            time.sleep(espera)
-
-
-def main(argv=None):
-    args = argumentos(argv)
-    if args.captura:
-        sin_terminal(args)
-        return
-    locale.setlocale(locale.LC_ALL, "")
-    os.environ.setdefault("ESCDELAY", "25")
-    import curses
-    try:
-        curses.wrapper(_bucle, args)
-    except KeyboardInterrupt:
-        pass

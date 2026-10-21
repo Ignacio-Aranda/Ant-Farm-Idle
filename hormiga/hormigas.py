@@ -334,38 +334,3 @@ class Hormiga:
             self.decidir(m)
         elif not self.durmiendo and self.rng.random() < dt * 0.15:
             self.dir = -self.dir  # mira a su alrededor
-
-    def dibujar(self, m, gorro=None):
-        """Pinta la hormiga y devuelve su etiqueta (x, y, nombre, color) para pintarla al final."""
-        sx, sy = m.a_pantalla(self.x, self.y)
-        d = (UNI if m.unicode else ASCII)[self.dir]
-        col = self.color
-        quieta = not self.ruta and not (self.escoltando and self.escoltando[0].ruta)
-        if self.durmiendo and quieta:
-            dx, t = d["dormida"]
-            m.texto(sy - 1, sx + dx, t, col)
-            dx, t = d["patas_dormida"]
-            m.texto(sy, sx + dx, t, col)
-            fase = int(self.t) % 3
-            m.texto(sy - 2 - (fase > 1), sx + 4 + fase, "z" if fase < 2 else "Z", color("s"))
-            return (sx - len(self.nombre) // 2, sy - 3, self.nombre, self.color)
-        dx, t = d["cuerpo"]
-        m.texto(sy - 1, sx + dx, t, col)
-        dx, t = d["patas"][self.pasos % 2] if not quieta else d["patas_quieta"]
-        m.texto(sy, sx + dx, t, col)
-        cabeza = sx + d["cabeza"]
-        if gorro in GORROS:
-            for dy, ddx, u, a, c in GORROS[gorro]:
-                m.texto(sy + dy, cabeza + ddx * self.dir if len(u) == 1 else cabeza + ddx,
-                        u if m.unicode else a, color(c))
-            if gorro in ("flor", "antifaz"):
-                dx, t = d["antenas"]
-                m.texto(sy - 2, sx + dx, t, col)
-        else:
-            dx, t = d["antenas"]
-            m.texto(sy - 2, sx + dx, t, col)
-        if self.carga:
-            cx = sx + d["carga"] if self.dir > 0 else sx + d["carga"] - len(self.carga) + 1
-            m.texto(sy - 1, cx, self.carga, self.carga_color or color("arena"))
-        arriba = 4 if gorro in ("cumple", "fiesta", "papa_noel", "capirote", "bruja") else 3
-        return (sx - len(self.nombre) // 2, sy - arriba, self.nombre, self.color)

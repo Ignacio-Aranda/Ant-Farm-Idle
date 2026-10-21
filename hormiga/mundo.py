@@ -1,35 +1,22 @@
 """El hormiguero completo: une la tierra, la superficie y las hormigas."""
 
 import datetime
-import math
 
-from motor import fuente
-from motor.colores import Fondo, color
-from motor.sprites import construir, lineas, mascara_lineas, pintor_fijo
+from motor.colores import color
 
 from . import fiestas as F
-from . import decoracion as DE
 from . import muebles as MU
 from . import tiempo as T
 from .hormigas import Hormiga
 from .superficie import Superficie
 from .vida import Vida
-from .tierra import ANCHO, ARCILLA, ARENA, HUMUS, PROF, ROCA, Plan
+from .tierra import ANCHO, PROF, Plan
 
 DIAS_CORTOS = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"]
 DIAS_LARGOS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 MESES_LARGOS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
                 "septiembre", "octubre", "noviembre", "diciembre"]
 MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
-
-CAPAS_UNI = {HUMUS: "▓", ARENA: "░", ARCILLA: "▒", ROCA: "▓"}
-CAPAS_ASCII = {HUMUS: "%", ARENA: ".", ARCILLA: ":", ROCA: "#"}
-CAPAS_COLOR = {HUMUS: "marron", ARENA: "arena", ARCILLA: 137, ROCA: "gris"}
-
-CIELO_DIA = Fondo(32, -1)
-CIELO_NOCHE = Fondo(17, -1)
-CIELO_LLUVIA = Fondo(67, -1)
-CIELO_CALIMA = Fondo(173, -1)
 
 
 def _fecha(v):
@@ -54,14 +41,10 @@ class Mundo:
         self.contexto_cada = 1.0
         self.demo_texto = None
         self.pausa_texto = None
-        self.colores_tierra = {k: color(v) for k, v in CAPAS_COLOR.items()}
         self.hormigas = {}
         self.cargar_gente(salas_cfg, idos)
         principales = self.salas_cfg
         self.plan = Plan(self.semilla, self.fundacion, principales)
-        self.detalles = DE.detalles_suelo(self.plan, self.semilla)
-        self.colores_borde = {k: color(v) for k, v in DE.BORDE.items()}
-        self._muebles_cache = {}
         self.construir()
 
     # ----------------------------------------------------------- la gente
@@ -109,14 +92,10 @@ class Mundo:
         self.noticias = []
         self._citas_hechas = set()
         self._espera_jefe = 600.0
-        self._cache_tierra = None
         self.hormigas = {}
         self.actualizar_contexto(forzar=True)
         self._diario_dia = None
         self.diario = []
-
-    def a_pantalla(self, gx, gy):
-        return self.ox + gx, self.oy + gy
 
     # ------------------------------------------------------------ contexto
 
@@ -138,15 +117,6 @@ class Mundo:
             self.llovio = T.llovio_hace(self.ahora, 8, self.semilla)
             self.llovio_semana = any(T.tiempo_del_dia(hoy - datetime.timedelta(d), self.semilla).llueve
                                      for d in range(4))
-        if self.tiempo_hoy.calima and not self.de_noche:
-            self.fondo_cielo = CIELO_CALIMA
-        elif self.lluvia > 0 and not self.de_noche:
-            self.fondo_cielo = CIELO_LLUVIA
-        else:
-            self.fondo_cielo = CIELO_NOCHE if self.de_noche else CIELO_DIA
-        if self.pantalla.modo != 256:
-            self.fondo_cielo = None
-
         act = F.activas(self.fiestas, hoy)
         self.decoraciones = {f.decoracion for f in act}
         self.fiesta_mensaje = act[-1].mensaje if act else None
@@ -285,228 +255,6 @@ class Mundo:
 
     # ------------------------------------------------------------- dibujo
 
-    def texto(self, y, x, t, c, fondo=None):
-        yy = int(y)
-        if yy < 0 or yy >= self.alto - 1:
-            return
-        xx = math.floor(x)
-        if xx < 0:
-            t = t[-xx:]
-            xx = 0
-        if xx + len(t) > self.ancho:
-            t = t[:self.ancho - xx]
-        if not t:
-            return
-        if yy < self.suelo_y and (fondo is None or fondo is self.fondo_cielo):
-            # en el cielo, el fondo de cada casilla es el del cielo o el de la montaña
-            fondo = self.fondo_cielo
-            monte = self.superficie.fondo_monte
-            alturas = self.superficie.cima
-            if monte is not None and yy >= self.superficie.cima_min:
-                ini = xx
-                actual = None
-                for i in range(len(t) + 1):
-                    if i < len(t):
-                        x = xx + i
-                        f = monte if 0 <= x < len(alturas) and yy >= alturas[x] else fondo
-                    else:
-                        f = None
-                    if i == 0:
-                        actual = f
-                        continue
-                    if f is not actual or i == len(t):
-                        self.pantalla.poner(yy, ini, t[ini - xx:i], c, actual)
-                        ini, actual = xx + i, f
-                return
-        self.pantalla.poner(yy, xx, t, c, fondo)
-
-    def blit(self, cuadro, x, y):
-        ix, iy = math.floor(x), math.floor(y)
-        for dy, dx, t, c in cuadro.tramos:
-            self.texto(iy + dy, ix + dx, t, c)
-
-    def _tierra(self):
-        """Filas de tierra troceadas en tramos de un mismo color (se recalcula al excavar).
-        Lleva raíces, piedras, gemas y fósiles, y los bordes de los túneles más oscuros."""
-        clave = (self.plan.version, self.ancho, self.alto, self.unicode)
-        if self._cache_tierra and self._cache_tierra[0] == clave:
-            return self._cache_tierra[1]
-        capas = CAPAS_UNI if self.unicode else CAPAS_ASCII
-        cav = self.plan.cavado
-        detalles = self.detalles
-        filas = []
-        visibles = min(PROF, self.alto - 1 - self.oy)
-        cache_color = {}
-        for gy in range(visibles):
-            tramos = []
-            actual, ini, buf = None, 0, []
-            for sx in range(self.ancho):
-                gx = sx - self.ox
-                dentro = 0 <= gx < ANCHO
-                gxc = min(ANCHO - 1, max(0, gx))
-                if dentro and cav(gx, gy):
-                    celda = None
-                else:
-                    tipo = self.plan.tipo(gxc, gy)
-                    ch = capas[tipo]
-                    col = self.colores_tierra[tipo]
-                    det = detalles.get((gx, gy)) if dentro else None
-                    if det and self.unicode:
-                        ch, nombre = det
-                        col = cache_color.get(nombre)
-                        if col is None:
-                            col = cache_color[nombre] = color(nombre)
-                    elif dentro and (cav(gx - 1, gy) or cav(gx + 1, gy) or cav(gx, gy - 1)
-                                     or cav(gx, gy + 1)):
-                        col = self.colores_borde[tipo]
-                    elif tipo == ARENA and (sx * 7 + gy * 13) % 29 == 0:
-                        ch = "·" if self.unicode else ","
-                    elif tipo == ROCA and (sx * 5 + gy * 3) % 7 == 0:
-                        ch = "▒" if self.unicode else "#"
-                    celda = (ch, col)
-                c = celda[1] if celda else None
-                if c != actual or (celda is None) != (actual is None):
-                    if actual is not None:
-                        tramos.append((ini, "".join(buf), actual))
-                    actual, ini, buf = c, sx, []
-                if celda:
-                    buf.append(celda[0])
-            if actual is not None:
-                tramos.append((ini, "".join(buf), actual))
-            filas.append(tramos)
-        self._cache_tierra = (clave, filas)
-        return filas
-
-    def dibujar_tierra(self):
-        poner = self.pantalla.poner
-        for gy, tramos in enumerate(self._tierra()):
-            sy = self.oy + gy
-            for x, t, c in tramos:
-                poner(sy, x, t, c, None)
-
-    def _muebles(self, s):
-        """Muebles de una sala que ya han aparecido hoy, listos para pintar."""
-        dia = int(self.dia)
-        clave = (s.clave, dia, self.unicode)
-        if clave in self._muebles_cache:
-            return self._muebles_cache[clave]
-        lista = list(MU.de_sala(s))
-        cfg = next((c for c in self.salas_cfg if c["clave"] == s.clave), None)
-        for mu in (cfg or {}).get("muebles", []):
-            try:
-                d = mu.get("dia", 0)
-                if mu.get("fecha"):
-                    d = (_fecha(mu["fecha"]) - self.fundacion).days
-                lista.append((mu.get("nombre", "algo nuevo"), mu["arte"], mu.get("mascara"),
-                              mu.get("color", "blanco"), int(mu.get("x", 2)),
-                              mu.get("sitio", "suelo"), d))
-            except (KeyError, ValueError):
-                continue
-        # si un mueble sustituye a otro en el mismo sitio, gana el más nuevo
-        visibles = {}
-        for nombre, arte, masc, col, dx, sitio, d in lista:
-            if d <= dia:
-                visibles[(dx, sitio)] = (arte, masc, col, dx, sitio)
-        out = []
-        for arte, masc, col, dx, sitio in visibles.values():
-            al = lineas(arte) if "\n" in arte else [arte]
-            cu = construir(al, mascara_lineas(masc, len(al)), pintor_fijo(col), solido=False)
-            x = s.x0 + (dx if dx >= 0 else s.ancho + dx - cu.ancho + 1)
-            y = s.piso - cu.alto + 1 if sitio == "suelo" else s.y0 + 2
-            out.append((cu, x, y))
-        if len(self._muebles_cache) > 50:
-            self._muebles_cache.clear()
-        self._muebles_cache[clave] = out
-        return out
-
-    def dibujar_salas(self):
-        cumple_en = {}
-        for h in self.hormigas.values():
-            if h.nombre in self.cumples:
-                cumple_en.setdefault(h.sala, []).append(h.nombre)
-        for s in self.salas:
-            sx, sy = self.a_pantalla(s.x0, s.y0)
-            col = color(s.color) if s.color else color("blanco")
-            DE.dibujar_sala(self, s, " y ".join(cumple_en.get(s.clave, [])) or None)
-            etiqueta = s.nombre[:s.ancho - 6]
-            marco = ("╡ %s ╞" if self.unicode else "[ %s ]") % etiqueta
-            self.texto(sy, sx + (s.ancho - len(marco)) // 2, marco, col if s.principal else color("blanco"))
-            for cu, x, y in self._muebles(s):
-                gx, gy = self.a_pantalla(x, y)
-                self.blit(cu, gx, gy)
-            if s.clave == "planta2" and int(self.t * 2) % 4 == 0:
-                fx, fy = self.a_pantalla(s.x0 + 6, s.piso - 4)
-                self.texto(fy, fx, "°", color("C"))  # burbuja en la fuente
-            if s.clave == "museo":
-                hallados = [o for o in self.plan.objetos if o[5] <= self.dia]
-                vitrina = "  ".join(o[3] for o in hallados)[:s.ancho - 4] or "(vacío)"
-                self.texto(sy + 3, sx + 2, vitrina, color("Y"))
-            if s.clave == "despensa":
-                lleno = min(1.0, (self.dia - self.plan._obra_sala["despensa"].fin) / 150)
-                self.texto(sy + s.alto - 1, sx + 14, "°" * max(1, int((s.ancho - 16) * lleno)),
-                           color("amarillo"))
-            if "navidad" in self.decoraciones and s.principal or ("navidad" in self.decoraciones
-                                                                  and s.clave == "comedor"):
-                for k in range(2, s.ancho - 2, 3):
-                    if int(self.t * 2 + k) % 3:
-                        self.texto(sy + 1, sx + k, "*", color("RYGB"[k % 4]))
-            if "halloween" in self.decoraciones:
-                self.texto(sy + 1, sx + 1, "╱╲" if self.unicode else "/\\", color("s"))
-        for x, y, nombre, icono, col, dia in self.plan.objetos:
-            if dia <= self.dia:
-                sx, sy = self.a_pantalla(x, y)
-                self.texto(sy, sx, icono, color(col))
-
-    def dibujar_nombres(self, etiquetas):
-        """Los nombres van siempre encima de todo. Si dos chocan, uno sube una fila."""
-        ocupado = {}
-        for x, y, texto, col in sorted(etiquetas, key=lambda e: (e[1], e[0])):
-            x0, x1 = x, x + len(texto)
-            for fila in (y, y - 1, y - 2, y + 1):
-                usados = ocupado.setdefault(fila, [])
-                if all(x1 + 1 <= a or x0 >= b + 1 for a, b in usados):
-                    break
-            else:
-                fila = y
-            ocupado.setdefault(fila, []).append((x0, x1))
-            fondo = self.fondo_cielo if fila < self.suelo_y else None
-            self.texto(fila, x0, texto, col, fondo)
-
-    def dibujar_hud(self):
-        """Arriba: la fecha a la izquierda y la hora en grande a la derecha."""
-        W = self.ancho
-        a = self.ahora
-        f = self.fondo_cielo
-        fecha = "%s, %d de %s de %d" % (DIAS_LARGOS[a.weekday()], a.day, MESES_LARGOS[a.month - 1], a.year)
-        icono = ("☂" if self.lluvia else "☁" if self.tiempo_hoy.nubes > 0.6 else
-                 "☾" if self.de_noche else "☀") if self.unicode else ""
-        self.texto(0, 1, fecha, color("W"), f)
-        self.texto(1, 1, "Día %d del hormiguero · %s · %s %.0f °C" % (
-            int(self.dia), self.estacion, icono, self.temperatura), color("blanco"), f)
-        if self.pausa_texto:
-            self.texto(2, 1, " ⏸ %s " % self.pausa_texto, color("negro"), Fondo(229, 3))
-        elif self.demo_texto:
-            self.texto(2, 1, self.demo_texto, color("s"), f)
-        filas = fuente.renderizar(a.strftime("%H:%M"), "bloque" if self.unicode else "#", 1)
-        x = W - len(filas[0]) - 2
-        for i, fila in enumerate(filas):
-            self.texto(i, x, fila, color("W"), f)
-
-    def dibujar_estado(self):
-        """Abajo: sólo el diario (con lo que acaba de pasar, si es reciente)."""
-        W = self.ancho
-        self.actualizar_diario()
-        y = self.alto - 1
-        if self.noticias and self.t - self.noticias[-1][2] < 25:
-            n = self.noticias[-1]
-            t = " ¡Ahora! · %s" % n[1]
-            self.pantalla.poner(y, 0, t[:W - 1], color("amarillo_brillante"), None)
-        elif self.diario:
-            recientes = self.diario[-4:] + [(n[0], n[1]) for n in self.noticias[-4:]]
-            e = recientes[-1 - int(self.t / 8) % len(recientes)]
-            t = " Día %d · %s" % (e[0], e[1])
-            self.pantalla.poner(y, 0, t[:W - 1], color("arena"), None)
-
     def actualizar_diario(self):
         hoy = self.ahora.date()
         if self._diario_dia == (hoy, int(self.dia * 24)):
@@ -587,26 +335,3 @@ class Mundo:
             ev.extend(lista)
         ev.sort(key=lambda e: e[1])
         self.diario = [(e[0], e[2]) for e in ev]
-
-    def dibujar(self):
-        p = self.pantalla
-        p.nuevo_cuadro()
-        if self.alto < 40 or self.ancho < 80:
-            p.poner(0, 0, "Terminal demasiado pequeña (mín. 80x40)"[:self.ancho], color("W"), None)
-            return
-        self.superficie.dibujar_cielo()
-        self.dibujar_tierra()
-        self.dibujar_salas()
-        self.superficie.dibujar_suelo()
-        self.vida.dibujar()
-        self.superficie.dibujar_pancarta()
-        gorro = self.gorro_fiesta
-        etiquetas = []
-        for h in self.hormigas.values():
-            g = "cumple" if h.nombre in self.cumples else gorro
-            e = h.dibujar(self, g)
-            if e:
-                etiquetas.append(e)
-        self.dibujar_nombres(etiquetas)
-        self.dibujar_hud()
-        self.dibujar_estado()

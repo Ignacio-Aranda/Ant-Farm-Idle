@@ -387,44 +387,7 @@ class Vida:
 
     # ------------------------------------------------------------- dibujar
 
-    def dibujar(self):
-        m = self.m
-        fr = int(m.t * 3)
-        for c in self.cosas:
-            if c.estado != "libre":
-                continue
-            arte = c.arte[fr % len(c.arte)]
-            if c.dir < 0 and c.tipo == "presa":
-                arte = arte[::-1].translate(_ESPEJO)
-            sx, sy = m.a_pantalla(c.x, c.y)
-            m.texto(sy, sx, arte if m.unicode else _ascii(arte), c.color)
-        for e in self.enemigos:
-            sx, sy = m.a_pantalla(e.x, e.y)
-            if e.clave == "pajaro":
-                for i, linea in enumerate(PAJARO):
-                    m.texto(sy - 1 + i, sx, linea if m.unicode else _ascii(linea), e.color)
-            else:
-                arte = e.arte[fr % len(e.arte)]
-                m.texto(sy, sx, arte if m.unicode else _ascii(arte), e.color)
-        for x, y, _ in self.chispas:
-            sx, sy = m.a_pantalla(x, y)
-            m.texto(sy, sx, "✶" if m.unicode else "*", color("Y"))
-        for d in self.debajo:
-            sx, sy = m.a_pantalla(d["x"], d["y"])
-            if d["tipo"] == "lombriz":
-                t = "∿∿∿o" if int(d["t"] * 2) % 2 else "~~~o"
-                if d["vx"] < 0:
-                    t = "o" + t[:3]
-                m.texto(sy, sx, t if m.unicode else "~~~o", color("rosa"))
-            else:
-                m.texto(sy, sx - 2, "◖▓▓◗" if m.unicode else "(##)", color("gris"))
-
-
 _ESPEJO = str.maketrans("<>()[]{}╱╲«»◖◗", "><)(][}{╲╱»«◗◖")
-
-
-def _ascii(t):
-    return t.translate(str.maketrans("•ø▪◍◖◗▐▓▌▀╱╲‾∿ºo«»", "oo#@()|#|-/\\-~oo<>"))
 
 
 def _lista(nombres):
