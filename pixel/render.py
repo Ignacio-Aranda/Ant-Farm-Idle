@@ -1390,7 +1390,10 @@ class Render:
         elif m.diario:
             recientes = m.diario[-4:] + [(n[0], n[1]) for n in m.noticias[-4:]]
             e = recientes[-1 - int(m.t / 8) % len(recientes)]
-            texto, col = "Día %d · %s" % (e[0], e[1]), (220, 200, 160)
+            # cuándo pasó, contado desde hoy (arriba ya pone en qué día del hormiguero estamos)
+            hace = int(m.dia) - int(e[0])
+            cuando = "Hoy" if hace <= 0 else "Ayer" if hace == 1 else "Hace %d días" % hace
+            texto, col = "%s · %s" % (cuando, e[1]), (220, 200, 160)
         else:
             return
         dst.blit(self.letras.texto(texto, col, 8, sombra=False), (4, y - 1))

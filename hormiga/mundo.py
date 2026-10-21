@@ -230,7 +230,7 @@ class Mundo:
 
     def vida_entregada(self, h, cosa):
         destino = self.almacen_comida()
-        destino = ("la %s" % destino.nombre.lower()) if destino else "el nido"
+        destino = ("la sala %s" % destino.nombre) if destino else "el nido"
         if cosa.peso >= 2:
             ayudantes = [o.nombre for o in self.hormigas.values()
                          if o.escoltando and o.escoltando[0] is h]
@@ -277,7 +277,7 @@ class Mundo:
                     invitadas = [x for x in hs if x.sala == str(quien).lower()]
                 for x in invitadas:
                     x.convocar(self, sala, fin, "reunion")
-                self.noticia("%s en la %s." % (r.get("nombre", "Reunión"), sala.nombre))
+                self.noticia("%s en la sala %s." % (r.get("nombre", "Reunión"), sala.nombre))
         # el jefe llama a alguien al despacho de vez en cuando (días laborables, horario de oficina)
         jefe = next((c for c in self.salas_cfg if c.get("jefe")), None)
         ini, fin = self._franja("jornada", "09:00-18:00")
