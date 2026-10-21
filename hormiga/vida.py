@@ -391,10 +391,6 @@ class Vida:
                     h.liberar(m)
         self.enemigos = [e for e in self.enemigos if e.estado != "fin"]
 
-    # ------------------------------------------------------------- dibujar
-
-_ESPEJO = str.maketrans("<>()[]{}╱╲«»◖◗", "><)(][}{╲╱»«◗◖")
-
 
 def _lista(nombres):
     nombres = list(dict.fromkeys(nombres))

@@ -19,6 +19,13 @@ sudo apt-get install -y python3-pygame fonts-dejavu-core
 chmod +x "$DIR"/*.sh "$DIR"/*.py
 
 echo "== Servicio hormiguero"
+# La ruta del repositorio, escrita para la unidad: systemd toma "%" por un especificador
+# (va "%%") y ExecStart lo parte por los espacios (va entre comillas, con \ " y $ escapados)
+RUTA="${DIR//%/%%}"
+PROGRAMA="$RUTA/hormiguero_fb.py"
+PROGRAMA="${PROGRAMA//\\/\\\\}"
+PROGRAMA="${PROGRAMA//\"/\\\"}"
+PROGRAMA="${PROGRAMA//\$/\$\$}"
 sudo tee /etc/systemd/system/hormiguero.service >/dev/null <<EOF
 [Unit]
 Description=Ant Farm Idle en la pantalla
@@ -27,12 +34,12 @@ Conflicts=getty@tty1.service
 
 [Service]
 User=$USUARIO
-WorkingDirectory=$DIR
+WorkingDirectory=$RUTA
 Environment=PYTHONUNBUFFERED=1 HORMIGUERO_FB_INFO=1
 # variables propias (p. ej. OPENWEATHER_API_KEY=...), si existe el fichero
-EnvironmentFile=-$DIR/local/entorno
+EnvironmentFile=-$RUTA/local/entorno
 # Pinta en el framebuffer (/dev/fb0): con kmsdrm/EGL la pantalla de la Pi 3 se queda en negro
-ExecStart=/usr/bin/python3 $DIR/hormiguero_fb.py
+ExecStart=/usr/bin/python3 "$PROGRAMA"
 Restart=always
 RestartSec=5
 TTYPath=/dev/tty1

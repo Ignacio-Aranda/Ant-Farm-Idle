@@ -14,6 +14,9 @@ sitio = "izquierda"   # un hueco fijo, o un número del 0 (borde izquierdo) al 1
 aparece = 0           # opcional: día del hormiguero en que aparece (sale en el diario)
 ```
 
+Si algo está mal escrito (una función, unas paredes o un suelo que no existen), sale un
+aviso en la franja amarilla de la pantalla y se usa el valor por defecto (`otra`, `madera`).
+
 ## Funciones
 
 | funcion | Qué pasa |
@@ -23,7 +26,7 @@ aparece = 0           # opcional: día del hormiguero en que aparece (sale en el
 | `despacho` | Despacho. Si la sala tiene `jefe = true`, llama a gente de vez en cuando. |
 | `comedor` | Van a desayunar y a comer (ver `[horario]` en `config.toml`) y se refugian aquí. |
 | `agua` | Van a beber de vez en cuando. |
-| `despensa` | Aquí guardan la comida que traen de fuera (si no hay, la llevan al comedor). |
+| `despensa` | Aquí guardan la comida que traen de fuera (si no hay despensa, la llevan al comedor o, si tampoco hay, a la primera sala). |
 | `museo` | Expone los objetos que encuentran al excavar. |
 | `otra` | Sólo decorativa: la visitan de vez en cuando. |
 
@@ -32,7 +35,8 @@ aparece = 0           # opcional: día del hormiguero en que aparece (sale en el
 En el suelo: `izquierda`, `centro_izquierda`, `centro`, `centro_derecha`, `derecha`.
 En la pared: `pared_izquierda`, `pared`, `pared_derecha`.
 Cada pieza ya sabe si va en el suelo o en la pared; si no pones `sitio`, usa el suyo.
-Si una pieza no cabe en la sala (en las más estrechas), no se pinta y sale un aviso.
+Si el hueco no existe, sale un aviso y la pieza va a su sitio de siempre. Si una pieza
+no existe, o no cabe en la sala (en las más estrechas), no se pinta y sale un aviso.
 
 ## Piezas
 

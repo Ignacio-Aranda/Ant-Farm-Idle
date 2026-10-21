@@ -1,10 +1,11 @@
-"""Colores: nombres, códigos de máscara, paleta xterm-256 y degradados."""
+"""Colores: nombres, códigos de máscara y paleta xterm-256."""
 
 from collections import namedtuple
 
 # c256: color en terminales de 256 colores
 # c8:   color base (0-7) para terminales de 8/16 colores
 # vivo: usar la variante brillante/negrita en 8/16 colores
+# (en pantalla se pinta en RGB: rgb_de_256(c256), o el "#RRGGBB" tal cual)
 Color = namedtuple("Color", "c256 c8 vivo")
 
 _BASE = {
@@ -70,25 +71,6 @@ def rgb_de_256(n):
 
 def _cercano(v):
     return min(range(6), key=lambda i: abs(_NIVELES[i] - v))
-
-
-# Azules, turquesas y negros del cubo xterm (sin rojo): los fondos del mar
-# cuantizados sólo a estos no salen grisáceos ni verdosos.
-_AZULES = [16 + 6 * g + b for g in range(6) for b in range(6) if b >= g]
-
-
-# Para el cielo del atardecer: azules + morados, rojos y naranjas (sin grises).
-_CIELO = _AZULES + [16 + 36 * r + 6 * g + b for r in range(1, 6) for g in range(4)
-                    for b in range(4) if r > g and r >= b]
-
-
-def a_256_azul(rgb, candidatos=None):
-    r, g, b = rgb
-
-    def d(n):
-        rr, gg, bb = rgb_de_256(n)
-        return (rr - r) ** 2 + (gg - g) ** 2 * 1.3 + (bb - b) ** 2
-    return min(candidatos or _AZULES, key=d)
 
 
 def a_256(rgb):
@@ -189,7 +171,7 @@ def _color(valor, defecto):
 
 
 def rgb(valor):
-    """RGB de un valor de configuración (para degradados)."""
+    """RGB de un valor de configuración (nombre, número, "#hex" o (r, g, b))."""
     if isinstance(valor, (list, tuple)) and len(valor) == 3:
         return tuple(int(v) for v in valor)
     if isinstance(valor, str) and valor.startswith("#"):
@@ -200,40 +182,3 @@ def rgb(valor):
 def mezclar(a, b, t):
     return tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3))
 
-
-def degradado(paradas, n):
-    """n colores RGB interpolados a lo largo de una lista de paradas RGB."""
-    if n <= 0:
-        return []
-    if len(paradas) == 1 or n == 1:
-        return [paradas[0]] * n
-    out = []
-    for i in range(n):
-        pos = i / (n - 1) * (len(paradas) - 1)
-        k = min(int(pos), len(paradas) - 2)
-        out.append(mezclar(paradas[k], paradas[k + 1], pos - k))
-    return out
-
-
-class Fondo:
-    """Color de fondo de una celda: 256 colores y su equivalente básico."""
-    __slots__ = ("c256", "c8")
-
-    def __init__(self, c256=-1, c8=-1):
-        self.c256 = c256
-        self.c8 = c8
-
-    @classmethod
-    def de_rgb(cls, rgb, basico=-1, azul=False, cielo=False):
-        if cielo:
-            return cls(a_256_azul(rgb, _CIELO), basico)
-        return cls(a_256_azul(rgb) if azul else a_256(rgb), basico)
-
-    def __eq__(self, o):
-        return isinstance(o, Fondo) and o.c256 == self.c256 and o.c8 == self.c8
-
-    def __hash__(self):
-        return hash((self.c256, self.c8))
-
-
-SIN_FONDO = Fondo()

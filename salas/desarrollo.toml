@@ -4,8 +4,9 @@
 #  bloque y pégalo en el fichero de la otra sala. Para quitar a alguien,
 #  añádelo a idos.toml (así tendrá su tumba) y bórralo de aquí; si en
 #  idos.toml le pones una fecha futura, déjalo aquí hasta ese día.
-#  Los cambios de gente se aplican solos a los pocos segundos de guardar;
-#  si cambias planta, x, ancho o tipo, reinicia el hormiguero.
+#  Los cambios de gente (los [[miembro]]), de las reuniones y de jefe se aplican
+#  solos a los pocos segundos de guardar. Lo de la sala en sí (nombre, color,
+#  planta, x, ancho, tipo y sus [[mueble]]) se ve al reiniciar el hormiguero.
 #
 #  Dónde va la sala:
 #  planta : 1 (la más alta, junto a la superficie) a 4 (la más honda)

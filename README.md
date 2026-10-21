@@ -37,15 +37,20 @@ Teclas: `q` o `Esc` para salir, `f` pantalla completa, `i` fotogramas por segund
 ## Ponerlo a tu gusto
 
 Todo se configura con ficheros de texto ([TOML](https://toml.io/es/)). Los cambios de
-gente, idas y fiestas se aplican solos a los pocos segundos de guardar; lo demás
-(salas, tipos, paisaje...) al reiniciar. Los de este repositorio son de ejemplo: los
-tuyos pueden ir en `local/`, fuera de git (mira [Tus datos](#tus-datos)).
+gente, reuniones, idas y fiestas se aplican solos a los pocos segundos de guardar; lo
+demás (nombre, color, sitio, ancho, tipo y muebles de las salas, los tipos y
+`config.toml`) al reiniciar. Los de este repositorio son de ejemplo: los tuyos pueden
+ir en `local/`, fuera de git (mira [Tus datos](#tus-datos)).
+
+Si algo está mal escrito (una fecha, un color, una sala demasiado estrecha...), el
+hormiguero no se para: usa un valor por defecto y lo cuenta en una franja amarilla
+arriba de la pantalla. Con `--captura`, los avisos salen en la terminal.
 
 | Fichero | Qué hay |
 |---|---|
 | `salas/*.toml` | Una sala por fichero: su nombre, color, planta, tipo y la gente que trabaja en ella. |
 | `tipos/*.toml` | Los tipos de sala: qué hacen allí las hormigas y qué muebles hay. Ver [tipos/LEEME.md](tipos/LEEME.md). |
-| `idos.toml` | Los que se fueron: cada uno tiene su lápida en el cementerio. |
+| `idos.toml` | Los que se fueron: cada uno tiene su lápida en el cementerio y, el día en que se va, su despedida en el diario. |
 | `calendario.toml` | Las fiestas y cómo se decora el hormiguero. En `ejemplos/` hay uno con las fiestas de Andalucía y de España. |
 | `config.toml` | Nombre del grupo, fecha de fundación, ciudad, tiempo real, horarios, salas que se excavan durante el año y paisaje. |
 
@@ -67,7 +72,8 @@ cumple = "14-03"    # día-mes: ese día lleva gorro de fiesta y hay tarta arrib
 Los túneles y las rampas entre plantas se trazan solos, y las hormigas encuentran el
 camino por ellos. Si una sala tiene `jefe = true`, quien esté en ella llama de vez en
 cuando a alguien al despacho; las reuniones fijas se ponen con `[[reunion]]` (mira
-`salas/reuniones.toml`).
+`salas/reuniones.toml`). Cada hormiga va por su nombre: si dos personas se llaman igual,
+la segunda sale con el de su sala («Ana (Diseño)»).
 
 ### Muebles
 
@@ -187,7 +193,7 @@ encender y se relanza solo si se cierra) y evita que la pantalla se apague. Desd
 sudo systemctl restart hormiguero     # relanzarlo
 sudo systemctl stop hormiguero        # pararlo
 journalctl -u hormiguero -f           # ver mensajes y errores
-./en-pantalla.sh python3 hormiguero_fb.py --demo   # lanzar otra cosa en la pantalla un rato
+./en-pantalla.sh python3 hormiguero_fb.py --demo   # otra cosa en la pantalla (Ctrl+C: vuelve el hormiguero)
 ```
 
 En la Pi el servicio usa `hormiguero_fb.py`, que pinta directamente en el framebuffer

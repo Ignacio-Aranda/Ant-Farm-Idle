@@ -6,8 +6,6 @@ import random
 from motor.colores import color
 from motor.sprites import construir, lineas, mascara_lineas, pintor_fijo
 
-from . import decoracion as DE
-
 # Lo que hay en la superficie si config.toml no dice nada (x en % del ancho)
 SUELO_DEFECTO = [{"pieza": "chumbera", "x": 2}, {"pieza": "palmera", "x": 30}, {"pieza": "farola", "x": 42},
                  {"pieza": "olivo", "x": 49}, {"pieza": "almendro", "x": 89}]
@@ -19,23 +17,24 @@ def _sprite(arte, mascara=None, defecto="blanco", solido=False, extra=None):
     return construir(al, mascara_lineas(mascara, len(al)), pintor_fijo(defecto, extra), solido)
 
 
-# ------------------------------------------------------------------ dibujos
+def horizonte(W, rng):
+    """Los Montes de Málaga al fondo (alturas por columna)."""
+    alturas = []
+    h = 2.0
+    for x in range(W):
+        h += rng.uniform(-0.45, 0.45)
+        h = max(0.5, min(5.0, h))
+        alturas.append(h)
+    for _ in range(3):
+        alturas = [(alturas[max(0, i - 1)] + alturas[i] + alturas[min(W - 1, i + 1)]) / 3
+                   for i in range(W)]
+    return alturas
 
-SOL = [r"""
- \ | /
--- O --
- / | \
-""", r"""
-  \ /
--  O  -
-  / \
-"""]
-LUNAS = {
-    "llena": " .--.\n(    )\n `--'",
-    "creciente": " .-.\n(  _)\n `-'",
-    "menguante": " .-.\n(_  )\n `-'",
-    "nueva": "  .\n (  \n  '",
-}
+
+# ------------------------------------------------------------------ dibujos
+# La simulación sólo los usa para saber cuánto ocupan las nubes y el conejo;
+# cómo se ven en pantalla está en pixel/.
+
 NUBES = [r"""
    .--.
 .-(    ).
@@ -67,171 +66,6 @@ wwwww
 wwRww
 wwwww
 """
-CHUMBERA = r"""
-   _   _
-  ( ) ( )
- _( )_( )
-( ) | |
- \_ |_|
-    | |
-"""
-CHUMBERA_FRUTOS = [(0, 3), (0, 7), (1, 1), (2, 1)]
-TRONCO = r"""
-    )|(
-    )|(
-   /_|_\
-"""
-RAMAS = r"""
- \ \| |/ /
-  \_\|/_/
-    \|/
-"""
-# Copa del almendro: celdas que pueden tener flor u hoja
-COPA = [
-    "    .-~~~-.    ",
-    "  (~ ~ ~ ~ ~)  ",
-    " (~ ~ ~ ~ ~ ~) ",
-    "  (~ ~ ~ ~ ~)  ",
-    "    `~-.-~'    ",
-]
-COPA_ALMENDRO = [
-    "      ######      ",
-    "   ############   ",
-    " ################ ",
-    "##################",
-    " ################ ",
-    "  ######\\/######  ",
-    "     ###\\/###     ",
-]
-TRONCO_ALMENDRO = [
-    "        \\|/",
-    "        )|(",
-    "        )|(",
-    "       /)|(\\",
-    "      /_/ \\_\\",
-]
-RAMAS_ALMENDRO = [
-    "  \\   \\  |  /   /",
-    "   \\ \\  \\ | /  / /",
-    "    \\_\\__\\|/__/_/",
-    "         \\|/",
-]
-PALMERA = [
-    " '._  \\ |  / _.' ",
-    " _.-'\\ \\|/ /'-._ ",
-    "'   _.-'|'-._   '",
-    "   '   )|(    '  ",
-    "       (|)       ",
-    "       )|(       ",
-    "       (|)       ",
-    "       )|(       ",
-    "       (|)       ",
-    "      /)|(\\      ",
-]
-PALMERA_MASC = [
-    " GGG  G G  G GGG ",
-    " ggggG GgG Ggggg ",
-    "g   gggggggg   g ",
-    "   g   nNn    g  ",
-    "       nNn       ",
-    "       nNn       ",
-    "       nNn       ",
-    "       nNn       ",
-    "       nNn       ",
-    "      nnNnn      ",
-]
-COPA_OLIVO = [
-    "   ########   ",
-    " ############ ",
-    "##############",
-    " ############ ",
-    "   ###\\/###   ",
-]
-TRONCO_OLIVO = [
-    "     \\||",
-    "      ||/",
-    "      ||",
-    "     /||\\",
-    "    /_/\\_\\",
-]
-PINO_NAVIDAD = r"""
-    *
-   /o\
-  /*o*\
- /o*o*o\
-/*o*o*o*\
-   |_|
-"""
-PINO_MASC = """
-    Y
-   gRg
-  gYgBg
- gRgYgRg
-gBgRgYgBg
-   nnn
-"""
-CALABAZA = r"""
-  ,
-(^v^)
-"""
-CALABAZA_MASC = """
-  g
-OOOOO
-"""
-REGALO = r"""
- _\/_
-[_##_]
-"""
-TARTA = r"""
- i i i
-[~~~~~]
-[_____]
-"""
-TARTA_MASC = """
- Y Y Y
-pwwwwwp
-nnnnnnn
-"""
-CRUZ_MAYO = r"""
-  *@*
- *@+@*
-  *@*
-   |
-"""
-CRUZ_MASC = """
-  RPR
- RPYPR
-  RPR
-   g
-"""
-HOGUERA = [r"""
-  ) (
- ( ) )
-(_)\_)
-""", r"""
- ( )
-( ( )
-(_)\_)
-"""]
-HOGUERA_MASC = """
-  Y R
- R O Y
-nnnnnn
-"""
-TRONO = r"""
-  i  i  i  i
- /==========\
- |  *    *  |
-"""
-TRONO_MASC = """
-  Y  Y  Y  Y
- YYYYYYYYYYYY
- YY  O    O YY
-"""
-BANDERAS = {
-    "andalucia": ["verde_brillante", "blanco_brillante", "verde_brillante"],
-    "espana": ["rojo_brillante", "amarillo_brillante", "rojo_brillante"],
-}
 
 
 class Bicho:
@@ -285,15 +119,9 @@ class Superficie:
         self.rng = random.Random()
         self.relampago = 0.0
         self.cuadros_conejo = [_sprite(a, CONEJO_MASC) for a in CONEJO]
-        self.montes = DE.horizonte(W, rng)
-        y0 = m.suelo_y - 1
-        self.cima = [y0 - int(h) + 1 for h in self.montes]   # primera fila de montaña llena
-        self.cima_min = min(self.cima)
-        self.fondo_monte = None
+        self.montes = horizonte(W, rng)
         self.piedras = [(rng.randrange(2, W - 3), rng.choice(["◖◗", "◖▬◗", "°", "◦"]))
                         for _ in range(W // 16)]
-        self.copa_rng = [[rng.random() for _ in range(20)] for _ in range(10)]
-        self.copa_rng2 = [[rng.random() for _ in range(20)] for _ in range(10)]
 
     def _leer_paisaje(self, p, W):
         """[paisaje] de config.toml. Las x vienen en % del ancho y aquí pasan a columnas."""
@@ -378,7 +206,7 @@ class Superficie:
                                     rng.choice("*.,'~"), color(rng.choice("RYGBMCO")), 12])
         if "corazones" in deco and rng.random() < dt * 0.8:
             self.particulas.append([rng.uniform(0, W), m.suelo_y - 1, rng.uniform(-0.5, 0.5), -1.5,
-                                    "♥" if m.unicode else "<3", color("R"), 8])
+                                    "♥", color("R"), 8])
         if "nochevieja" in deco and m.de_noche and rng.random() < dt * 0.7:
             self._fuego_artificial()
         for p in self.particulas:
@@ -458,13 +286,12 @@ class Superficie:
                       (1 if der else -1) * rng.uniform(8, 12), rng.uniform(-1, 1), fps=6)
             b.tipo = "murcielago"
             self.bichos.append(b)
-        uni = m.unicode
         dia_claro = not m.de_noche and m.lluvia == 0
         # gaviotas (si hay costa cerca)
         if self.costa and dia_claro and rng.random() < dt / 45:
             der = rng.random() < 0.5
             for k in range(rng.randint(1, 3)):
-                c = [_sprite("‿v‿" if uni else "~v~", None, "W"), _sprite("⌒v⌒" if uni else "^v^", None, "W")]
+                c = [_sprite("‿v‿", None, "W"), _sprite("⌒v⌒", None, "W")]
                 b = Bicho(c, (-5 - k * 7) if der else (W + k * 7), rng.uniform(4, m.cielo_alto - 8),
                           (1 if der else -1) * rng.uniform(7, 10), rng.uniform(-0.4, 0.4), fps=2.5)
                 b.tipo = "gaviota"
@@ -472,7 +299,7 @@ class Superficie:
         # un avión que va o viene del aeropuerto (de noche, con luces)
         if "avion" not in hay and rng.random() < dt / 150:
             der = rng.random() < 0.5
-            arte = ("━━╸✈" if der else "✈╺━━") if uni else ("--=>" if der else "<=--")
+            arte = "━━╸✈" if der else "✈╺━━"
             b = Bicho([_sprite(arte, None, "plata")], -8 if der else W + 2, rng.uniform(5, 8),
                       (1 if der else -1) * 14)
             b.tipo = "avion"
@@ -511,7 +338,7 @@ class Superficie:
         if dia_claro and 3 <= mes <= 8 and len([b for b in self.bichos if getattr(b, "tipo", "") == "abeja"]) < 3 \
                 and rng.random() < dt / 20:
             x, _, _ = rng.choice(self.flores)
-            b = Bicho([_sprite("ʚ●ɞ" if uni else "o", None, "amarillo_brillante")], x, m.suelo_y - 2, 0,
+            b = Bicho([_sprite("ʚ●ɞ", None, "amarillo_brillante")], x, m.suelo_y - 2, 0,
                       vida=rng.uniform(20, 50))
             b.tipo = "abeja"
             b.x0 = x
@@ -524,8 +351,6 @@ class Superficie:
         if m.de_noche and m.lluvia == 0 and "erizo" not in hay and rng.random() < dt / 400:
             der = rng.random() < 0.5
             arte = "⌒⌒⌒°>" if der else "<°⌒⌒⌒"
-            if not uni:
-                arte = "^^^o>" if der else "<o^^^"
             b = Bicho([_sprite(arte, None, "marron")], -6 if der else W + 1, m.suelo_y,
                       (1 if der else -1) * 1.5)
             b.tipo = "erizo"

@@ -12,7 +12,8 @@
 #              corazones, libro, pi, banderines (genérica)
 #  gorro (opcional): el sombrero que llevan las hormigas ese día:
 #              fiesta, papa_noel, corona, capirote, bruja, flor, antifaz
-#  mensaje: sale de día en el cielo y en el diario.
+#  mensaje: sale en el cielo mientras dura la fiesta (de día y de noche; el día de un
+#           cumpleaños sale el suyo en su lugar) y en el diario el primer día.
 # =====================================================================
 
 [[fiesta]]

@@ -20,19 +20,9 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 class PantallaNula:
     """La simulación necesita saber el tamaño "en celdas": 160x64 (640x512 píxeles)."""
-    modo = 256
 
     def __init__(self, ancho=160, alto=64):
         self.ancho, self.alto = ancho, alto
-
-    def poner(self, *a):
-        pass
-
-    def nuevo_cuadro(self):
-        pass
-
-    def reiniciar_colores(self):
-        pass
 
 
 def tus_datos(nombre):
@@ -113,7 +103,6 @@ def sin_pantalla(args):
     simulado = [reloj()]
     fps = args.fps or 20.0
     m = Mundo(cfg, salas, idos, fiestas, PantallaNula(), lambda: simulado[0], avisos)
-    m.unicode = True
     r = Render(m, pantalla)
     pasos = int(args.segundos * fps)
     t_sim = t_dib = 0.0
@@ -162,7 +151,6 @@ def con_pantalla(args):
     from .render import Render
     reloj = A.crear_reloj(args, cfg, fiestas, salas, idos)
     m = Mundo(cfg, salas, idos, fiestas, PantallaNula(), reloj, avisos)
-    m.unicode = True
     if args.demo:
         m.contexto_cada = 0.25
         m.demo_texto = "DEMO · semilla %s · un día cada %g s" % (cfg["general"]["semilla"], args.seg_dia)

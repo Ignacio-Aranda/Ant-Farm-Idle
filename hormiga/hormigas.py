@@ -1,11 +1,5 @@
-"""Las hormigas: una por cada persona del equipo.
-
-Dibujo (mirando a la derecha), anclado en la cintura '•' y apoyado en el suelo:
-
-        ╲╱          <- antenas      (fila y-2)
-   ◖██◗•◖●◗›        <- cuerpo       (fila y-1)
-     ╱╲╱╲╱╲         <- patas        (fila y, el suelo)
-"""
+"""Las hormigas: una por cada persona del equipo. Aquí se decide adónde va y qué
+hace cada una; cómo se dibuja está en pixel/hormiga_arte.py."""
 
 import random
 from collections import deque
@@ -15,36 +9,6 @@ from motor.colores import color
 COLORES = ["rojo_brillante", "amarillo_brillante", "cian", "magenta_brillante", "verde_brillante",
            "naranja", "azul_brillante", "rosa", "blanco_brillante", "turquesa", "lima", "coral",
            "dorado", "morado", "salmon"]
-
-# (desplazamiento, texto) relativo a la cintura, para cada dirección
-UNI = {
-    1: {"cuerpo": (-4, "◖██◗•◖●◗›"), "dormida": (-4, "◖██◗•◖-◗"), "antenas": (3, "╲╱"),
-        "patas": [(-2, "╱╲╱╲╱╲"), (-2, "╲╱╲╱╲╱")], "patas_quieta": (-2, "╱╲╱╲╱╲"),
-        "patas_dormida": (-3, "‿‿‿‿‿‿"), "cabeza": 2, "carga": 5},
-    -1: {"cuerpo": (-4, "‹◖●◗•◖██◗"), "dormida": (-3, "◖-◗•◖██◗"), "antenas": (-4, "╲╱"),
-         "patas": [(-3, "╱╲╱╲╱╲"), (-3, "╲╱╲╱╲╱")], "patas_quieta": (-3, "╱╲╱╲╱╲"),
-         "patas_dormida": (-2, "‿‿‿‿‿‿"), "cabeza": -2, "carga": -5},
-}
-ASCII = {
-    1: {"cuerpo": (-4, "(##)o(o)>"), "dormida": (-4, "(##)o(-)"), "antenas": (3, "\\/"),
-        "patas": [(-2, "/\\/\\/\\"), (-2, "\\/\\/\\/")], "patas_quieta": (-2, "/\\/\\/\\"),
-        "patas_dormida": (-3, "______"), "cabeza": 2, "carga": 5},
-    -1: {"cuerpo": (-4, "<(o)o(##)"), "dormida": (-3, "(-)o(##)"), "antenas": (-4, "\\/"),
-         "patas": [(-3, "/\\/\\/\\"), (-3, "\\/\\/\\/")], "patas_quieta": (-3, "/\\/\\/\\"),
-         "patas_dormida": (-2, "______"), "cabeza": -2, "carga": -5},
-}
-
-# Gorros: lista de (dy, dx relativo al centro de la cabeza, texto unicode, texto ascii, color)
-GORROS = {
-    "cumple": [(-3, 0, "*", "*", "Y"), (-2, -1, "╱▓╲", "/#\\", "M")],
-    "fiesta": [(-3, 0, "*", "*", "Y"), (-2, -1, "╱▓╲", "/#\\", "C")],
-    "papa_noel": [(-3, 1, "○", "o", "W"), (-2, -1, "╱█╲", "/#\\", "R")],
-    "corona": [(-2, 0, "♛", "w", "Y")],
-    "capirote": [(-3, 0, "▲", "A", "morado"), (-2, -1, "▐█▌", "|#|", "morado")],
-    "bruja": [(-3, 0, "▲", "A", "morado"), (-2, -1, "▄█▄", "_#_", "morado")],
-    "flor": [(-2, -1, "✿", "*", "R")],
-    "antifaz": [(-1, -1, "▬", "=", "C")],
-}
 
 
 class Hormiga:

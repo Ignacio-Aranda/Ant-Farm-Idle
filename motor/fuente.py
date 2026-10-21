@@ -1,4 +1,4 @@
-"""Fuente grande de 5 filas para letreros, peces con nombre y el reloj."""
+"""Fuente grande de 5 filas, de bloques: el reloj y el «FELIZ CUMPLE» del cielo."""
 
 import unicodedata
 
@@ -99,6 +99,3 @@ def renderizar(texto, relleno="letra", espacio=1):
             filas[f] += glifo[f].replace("#", tinta).replace(".", " ") + sep
     return filas
 
-
-def ancho(texto, espacio=1):
-    return len(renderizar(texto, "#", espacio)[0])

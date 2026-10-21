@@ -14,12 +14,6 @@ from .superficie import Superficie
 from .vida import Vida
 from .tierra import ANCHO, OBRAS, PROF, Plan
 
-DIAS_CORTOS = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"]
-DIAS_LARGOS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-MESES_LARGOS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
-                "septiembre", "octubre", "noviembre", "diciembre"]
-MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
-
 
 def _fecha(v):
     if isinstance(v, datetime.date):
@@ -47,7 +41,6 @@ class Mundo:
         # nunca en la demo, con otra fecha ni al hacer capturas
         self.estado = Estado(self.raiz, self.fundacion.isoformat(), self.semilla) \
             if getattr(reloj, "real", False) else None
-        self.unicode = True
         self.fiestas = fiestas
         self.t = 0.0
         self.contexto_cada = 1.0
@@ -391,7 +384,7 @@ class Mundo:
         self.vida.actualizar(dt)
         self.superficie.actualizar(dt)
 
-    # ------------------------------------------------------------- dibujo
+    # ------------------------------------------------------------- diario
 
     def _eventos_dia(self, k, seco):
         """Lo que pasó el día k del hormiguero: fiestas, cumpleaños, llegadas, idas y el tiempo.
