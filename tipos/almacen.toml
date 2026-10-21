@@ -1,0 +1,11 @@
+funcion = "otra"
+paredes = "madera"
+suelo = "tierra"
+
+[[mueble]]
+pieza = "cajas"
+sitio = "izquierda"
+
+[[mueble]]
+pieza = "estanteria"
+sitio = "derecha"

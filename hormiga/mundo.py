@@ -5,12 +5,11 @@ import datetime
 from motor.colores import color
 
 from . import fiestas as F
-from . import muebles as MU
 from . import tiempo as T
 from .hormigas import Hormiga
 from .superficie import Superficie
 from .vida import Vida
-from .tierra import ANCHO, PROF, Plan
+from .tierra import ANCHO, OBRAS, PROF, Plan
 
 DIAS_CORTOS = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"]
 DIAS_LARGOS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
@@ -31,6 +30,7 @@ class Mundo:
         self.pantalla = pantalla
         self.reloj = reloj
         self.avisos = avisos if avisos is not None else []
+        self._avisado = set()
         self.semilla = cfg["general"]["semilla"]
         nombre = str(cfg["general"].get("nombre", "")).strip()
         self.de_quien = " de %s" % nombre if nombre else ""
@@ -43,8 +43,19 @@ class Mundo:
         self.pausa_texto = None
         self.hormigas = {}
         self.cargar_gente(salas_cfg, idos)
-        principales = self.salas_cfg
-        self.plan = Plan(self.semilla, self.fundacion, principales)
+        nido = cfg.get("nido", {})
+        self.tipos = cfg.get("tipos", {})
+        nombres_obras = nido.get("obras")
+        obras = OBRAS
+        if nombres_obras is not None:
+            por_clave = {o["clave"]: o for o in OBRAS}
+            obras = [por_clave.get(str(n).lower(), {"clave": str(n).lower(), "nombre": str(n), "ancho": 22})
+                     for n in nombres_obras]
+        for o in obras:
+            o["funcion"] = self.tipos.get(o.get("tipo", o["clave"]), {}).get("funcion", "otra")
+        self.plan = Plan(self.semilla, self.fundacion, self.salas_cfg, obras=obras,
+                         entrada=int(nido.get("entrada", 20)))
+        self.avisos.extend(self.plan.avisos)
         self.construir()
 
     # ----------------------------------------------------------- la gente
@@ -124,6 +135,9 @@ class Mundo:
 
         self.salas = self.plan.salas(self.dia)
         self.sala_por_clave = {s.clave: s for s in self.salas}
+        self.sala_por_funcion = {}
+        for s in self.salas:
+            self.sala_por_funcion.setdefault(s.funcion, s)
         self.frente = self.plan.frente(self.dia)
         self.salidas_x_grid = self.plan.salidas(self.dia)
         self.salidas_x = [self.ox + x for x in self.salidas_x_grid]
@@ -156,7 +170,8 @@ class Mundo:
         self.noticias = self.noticias[-30:]
 
     def vida_entregada(self, h, cosa):
-        destino = "la despensa" if "despensa" in self.sala_por_clave else "el comedor"
+        destino = self.almacen_comida()
+        destino = ("la %s" % destino.nombre.lower()) if destino else "el nido"
         if cosa.peso >= 2:
             ayudantes = [o.nombre for o in self.hormigas.values()
                          if o.escoltando and o.escoltando[0] is h]
@@ -206,7 +221,9 @@ class Mundo:
                 self.noticia("%s en la %s." % (r.get("nombre", "Reunión"), sala.nombre))
         # el jefe llama a alguien al despacho de vez en cuando (días laborables, horario de oficina)
         jefe = next((c for c in self.salas_cfg if c.get("jefe")), None)
-        if not jefe or not laborable or not 9 <= ahora.hour < 18:
+        ini, fin = self._franja("jornada", "09:00-18:00")
+        hora = ahora.hour + ahora.minute / 60
+        if not jefe or not laborable or not ini <= hora < fin:
             return
         despacho = self.sala_por_clave.get(jefe["clave"])
         jefes = [x for x in self.hormigas.values() if x.sala == jefe["clave"]]
@@ -218,6 +235,46 @@ class Mundo:
             x.convocar(self, despacho, ahora + datetime.timedelta(minutes=self.vida.rng.uniform(5, 20)),
                        "despacho")
             self.noticia("%s llama a %s al despacho." % (jefes[0].nombre, x.nombre))
+
+    def _franja(self, clave, defecto):
+        """Una franja horaria de [horario] en config.toml, "HH:MM-HH:MM", en horas decimales."""
+        texto = str(self.cfg.get("horario", {}).get(clave, defecto))
+        for t in (texto, defecto):
+            try:
+                ini, fin = (v.strip() for v in t.split("-"))
+                return tuple(int(h) + int(m) / 60 for h, m in (ini.split(":"), fin.split(":")))
+            except ValueError:
+                if t == texto and ("horario", clave) not in self._avisado:
+                    self._avisado.add(("horario", clave))
+                    self.avisos.append("horario: %s mal escrito (%s)" % (clave, texto))
+        return (0, 0)
+
+    def ganas_de_comer(self, hora):
+        """Cuánto les apetece ir al comedor a esta hora (según el horario)."""
+        a, b = self._franja("comida", "13:30-15:30")
+        if a <= hora <= b:
+            return 12.0
+        a, b = self._franja("desayuno", "10:30-11:00")
+        return 5.0 if a <= hora <= b else 1.0
+
+    def sala_funcion(self, funcion):
+        """La primera sala con esa función que ya existe (o None)."""
+        return self.sala_por_funcion.get(funcion)
+
+    def refugio(self):
+        """Donde se juntan: el comedor, o si no hay, la primera sala que haya."""
+        return self.sala_funcion("comedor") or (self.salas[0] if self.salas else None)
+
+    def almacen_comida(self):
+        return self.sala_funcion("despensa") or self.refugio()
+
+    def muebles_de(self, sala):
+        """Muebles de una sala: los de su tipo más los que añade su fichero."""
+        lista = list(self.tipos.get(sala.tipo, {}).get("muebles", []))
+        cfg = next((c for c in self.salas_cfg if c["clave"] == sala.clave), None)
+        if cfg:
+            lista += cfg.get("muebles", [])
+        return lista
 
     def punto_libre(self, sala, rng, yo):
         """Un sitio de la sala lejos de las demás hormigas (para que no se amontonen)."""
@@ -278,20 +335,19 @@ class Mundo:
             if o.objeto:
                 ev.append((d, o.fin + 0.01, "Hallazgo: %s." % o.objeto[2]))
         for s in self.plan.salas_todas:
-            cfg = next((c for c in self.salas_cfg if c["clave"] == s.clave), None)
-            lista = list(MU.de_sala(s))
-            for nombre, _a, _m, _c, _x, _s, d in lista:
-                if 0 < d <= self.dia:
-                    ev.append((d, d + 0.5, "%s: %s." % (s.nombre, nombre)))
-            for mu in (cfg or {}).get("muebles", []):
-                d = mu.get("dia", 0)
+            for mu in self.muebles_de(s):
+                d = mu.get("aparece", mu.get("dia", 0))
                 if mu.get("fecha"):
                     try:
                         d = (_fecha(mu["fecha"]) - self.fundacion).days
                     except ValueError:
                         continue
+                try:
+                    d = int(d)
+                except (TypeError, ValueError):
+                    continue
                 if 0 < d <= self.dia:
-                    ev.append((d, d + 0.5, "%s: %s." % (s.nombre, mu.get("nombre", "algo nuevo"))))
+                    ev.append((d, d + 0.5, "%s: %s nuevo." % (s.nombre, mu.get("nombre", mu.get("pieza", "algo")))))
         dias = int(self.dia)
         # los días ya calculados se guardan (si no cambia la gente ni el calendario)
         firma = (id(self.fiestas), tuple((p["nombre"], str(p.get("cumple")), p["alta"]) for p in self.personas),

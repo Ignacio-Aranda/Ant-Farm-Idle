@@ -4,6 +4,14 @@
 nombre = "la Oficina"      # sale en el diario: «Se funda el hormiguero de la Oficina: ...»
 fundacion = "2026-01-01"   # día 0: el hormiguero crece a partir de esta fecha
 semilla = 2026             # cambia el número para otro trazado de túneles
-fps = 8                    # fotogramas por segundo de la versión de terminal
-unicode = "auto"           # auto | si | no
 fps_pixel = 20             # fotogramas por segundo de la versión gráfica
+
+[horario]
+desayuno = "10:30-11:00"   # a esta hora muchas van al comedor
+comida = "13:30-15:30"     # y a esta, casi todas
+jornada = "09:00-18:00"    # quien es jefe sólo llama al despacho en este horario (días laborables)
+
+[nido]
+entrada = 20               # columna preferida para la entrada (de 3 a 156)
+# Salas que excavan a lo largo del año, en orden (cada una usa el tipo de su nombre):
+obras = ["despensa", "museo", "hongos", "almacen", "biblioteca"]

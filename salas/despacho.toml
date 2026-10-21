@@ -5,10 +5,10 @@
 # =====================================================================
 
 nombre = "Despacho"
-posicion = 2
 color = "dorado"
-nivel = 1
+planta = 1
 ancho = 22
+tipo = "despacho"
 jefe = true
 
 [[miembro]]

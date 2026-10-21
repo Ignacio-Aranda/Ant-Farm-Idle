@@ -38,6 +38,7 @@ def argumentos(argv=None):
     p = argparse.ArgumentParser(prog="hormiguero_pixel", description="Ant Farm Idle (pixel art).")
     p.add_argument("-c", "--config", default=os.path.join(RAIZ, "config.toml"))
     p.add_argument("--salas", default=os.path.join(RAIZ, "salas"))
+    p.add_argument("--tipos", default=os.path.join(RAIZ, "tipos"))
     p.add_argument("--idos", default=os.path.join(RAIZ, "idos.toml"))
     p.add_argument("--calendario", default=os.path.join(RAIZ, "calendario.toml"))
     p.add_argument("--fecha")

@@ -1,0 +1,20 @@
+# Sala de trabajo: dos escritorios, un cuadro y una planta que va creciendo.
+funcion = "trabajo"
+paredes = "madera"
+suelo = "madera"
+
+[[mueble]]
+pieza = "escritorio"
+sitio = "izquierda"
+
+[[mueble]]
+pieza = "escritorio"
+sitio = "centro_izquierda"
+
+[[mueble]]
+pieza = "cuadro"
+sitio = "pared"
+
+[[mueble]]
+pieza = "planta"
+sitio = "derecha"

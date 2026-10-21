@@ -1,0 +1,11 @@
+# =====================================================================
+#  COMEDOR · aquí desayunan, comen y se refugian cuando hay peligro fuera.
+#  Mismo formato que salas/desarrollo.toml (allí está explicado).
+# =====================================================================
+
+nombre = "Comedor"
+color = "blanco"
+planta = 1
+x = 40
+ancho = 34
+tipo = "comedor"

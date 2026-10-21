@@ -11,8 +11,33 @@ from . import fiestas as F
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 POR_DEFECTO = {
-    "general": {"fps": 8, "fundacion": "2026-10-14", "semilla": 2026, "unicode": "auto"},
+    "general": {"fundacion": "2026-01-01", "semilla": 2026},
 }
+
+FUNCIONES = ("trabajo", "reuniones", "despacho", "comedor", "agua", "despensa", "museo", "otra")
+
+
+def cargar_tipos(carpeta, avisos):
+    """Los tipos de sala de tipos/*.toml: función, paredes, suelo y muebles."""
+    tipos = {}
+    if not os.path.isdir(carpeta):
+        return tipos
+    for nombre in sorted(os.listdir(carpeta)):
+        if not nombre.endswith(".toml"):
+            continue
+        clave = os.path.splitext(nombre)[0].lower()
+        try:
+            d = cargar_toml(os.path.join(carpeta, nombre))
+        except Exception as e:
+            avisos.append("tipos/%s: %s" % (nombre, e))
+            continue
+        funcion = str(d.get("funcion", "otra")).lower()
+        if funcion not in FUNCIONES:
+            avisos.append("tipos/%s: función desconocida «%s»" % (nombre, funcion))
+            funcion = "otra"
+        tipos[clave] = {"funcion": funcion, "paredes": d.get("paredes", "madera"),
+                        "suelo": d.get("suelo", "madera"), "muebles": list(d.get("mueble", []))}
+    return tipos
 
 
 def cargar(args, avisos):
@@ -26,6 +51,8 @@ def cargar(args, avisos):
                     cfg[k] = v
         except Exception as e:
             avisos.append("config: %s" % e)
+    tipos = cargar_tipos(args.tipos, avisos)
+    cfg["tipos"] = tipos
     salas = []
     if os.path.isdir(args.salas):
         for nombre in sorted(os.listdir(args.salas)):
@@ -36,19 +63,23 @@ def cargar(args, avisos):
             except Exception as e:
                 avisos.append("%s: %s" % (nombre, e))
                 continue
+            tipo = str(d.get("tipo", "trabajo")).lower()
+            if tipo not in tipos:
+                avisos.append("%s: no existe el tipo «%s» (en tipos/)" % (nombre, tipo))
             salas.append({
                 "clave": os.path.splitext(nombre)[0].lower(),
                 "nombre": d.get("nombre", os.path.splitext(nombre)[0]),
-                "posicion": d.get("posicion", 99),
                 "color": d.get("color", "blanco"),
-                "nivel": d.get("nivel", 2),
+                "planta": d.get("planta", d.get("nivel", 2)),
+                "x": d.get("x"),
                 "ancho": d.get("ancho", 32),
+                "tipo": tipo,
+                "funcion": tipos.get(tipo, {}).get("funcion", "trabajo"),
                 "reuniones": d.get("reunion", []),
                 "jefe": bool(d.get("jefe", False)),
                 "miembros": [m for m in d.get("miembro", []) if m.get("nombre")],
                 "muebles": d.get("mueble", []),
             })
-    salas.sort(key=lambda s: (s["posicion"], s["clave"]))
     idos = []
     if os.path.exists(args.idos):
         try:
@@ -160,13 +191,3 @@ def crear_reloj(args, cfg, fiestas=None, salas=None, idos=None):
     base = inicio or datetime.datetime.now()
     t0 = time.monotonic()
     return lambda: base + datetime.timedelta(seconds=(time.monotonic() - t0) * factor)
-
-
-_CAJAS = {}
-for _grupo, _ascii in (("─═━▬", "-"), ("│║┃", "|"), ("┌┐└┘╔╗╚╝╒╕╭╮╰╯├┤┬┴┼╞╡╤╧", "+"),
-                       ("▀▄█▌▐▍▓░▒▤▟▙", "#"), ("▪▫•●°", "o"), ("◖", "("), ("◗", ")"),
-                       ("›", ">"), ("‹", "<"), ("╱", "/"), ("╲", "\\"), ("‿", "_"),
-                       ("▲", "A"), ("♛", "w"), ("✿", "*"), ("◷", "o"), ("≈", "~")):
-    for _c in _grupo:
-        _CAJAS[ord(_c)] = _ascii
-

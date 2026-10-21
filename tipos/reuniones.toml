@@ -1,0 +1,12 @@
+# Sala de reuniones: mesa larga y una pantalla con gráficas.
+funcion = "reuniones"
+paredes = "madera"
+suelo = "madera"
+
+[[mueble]]
+pieza = "mesa_reuniones"
+sitio = "centro"
+
+[[mueble]]
+pieza = "pantalla"
+sitio = "pared"

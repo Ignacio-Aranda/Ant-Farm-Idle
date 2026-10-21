@@ -1,0 +1,11 @@
+funcion = "museo"
+paredes = "madera"
+suelo = "madera"
+
+[[mueble]]
+pieza = "vitrina"
+sitio = "izquierda"
+
+[[mueble]]
+pieza = "vitrina"
+sitio = "centro"

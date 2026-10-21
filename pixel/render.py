@@ -10,7 +10,6 @@ superficie (árboles, cementerio... cada día) y la tierra (sólo se repinta lo
 que se excava).
 """
 
-import datetime
 import math
 import random
 
@@ -21,6 +20,7 @@ from hormiga.tierra import ANCHO, ARCILLA, ARENA, HUMUS, PROF, ROCA
 
 from . import arte as A
 from . import hormiga_arte as HA
+from . import muebles as MU
 from .base import (CH, CW, CLAVE, Letras, circulo_luz, claro, espejo, mezclar, multiplicar, oscuro,
                    reloj_grande, rgb, superficie, tenir)
 
@@ -34,6 +34,7 @@ TUNEL = (34, 23, 17)
 PARED_SALA = (66, 47, 34)
 MADERA = (126, 82, 46)
 MADERA_OSC = (92, 58, 32)
+PAREDES = {"madera": PARED_SALA, "azulejo": (52, 70, 82), "piedra": (74, 70, 68)}
 
 COLORES_FIESTA = [(230, 50, 50), (250, 220, 60), (60, 200, 90), (70, 140, 240), (240, 240, 240),
                   (230, 90, 200)]
@@ -788,7 +789,9 @@ class Render:
         for sala in (m.salas if salas is None else salas):
             r = self._rect_sala(sala)
             # pared interior (más clara que los túneles) sólo donde está excavado
-            pared = PARED_SALA if sala.clave != "planta2" else (52, 70, 82)
+            estilo = self.m.tipos.get(sala.tipo, {})
+            pared = estilo.get("paredes", "madera")
+            pared = PAREDES.get(pared) or (rgb(pared) if str(pared).startswith("#") else PARED_SALA)
             for gy in range(sala.y0, sala.piso + 1):
                 for gx in range(sala.x0, sala.x0 + sala.ancho):
                     if m.plan.cavado(gx, gy):
@@ -798,9 +801,11 @@ class Render:
                 pygame.draw.line(s, oscuro(pared, 0.88), (x, r.y + 6), (x, r.bottom - 4))
             # suelo de madera
             suelo_y = (sala.piso + 1) * CH
-            if sala.clave == "planta2":
+            if estilo.get("suelo") == "baldosa":
                 for x in range(r.x, r.right, 6):
                     pygame.draw.rect(s, (200, 210, 215), (x, suelo_y, 5, 3))
+            elif estilo.get("suelo") == "tierra":
+                pygame.draw.rect(s, (110, 78, 50), (r.x + 2, suelo_y, r.width - 4, 3))
             else:
                 pygame.draw.rect(s, MADERA, (r.x + 2, suelo_y, r.width - 4, 3))
                 for x in range(r.x + 4, r.right - 4, 9):
@@ -856,123 +861,32 @@ class Render:
             pygame.draw.ellipse(s, col, (x, y + 1, 6, 4))
             s.set_at((x + 1, y + 2), claro(col, 0.5))
 
+    def _piezas(self, sala):
+        """Los muebles de la sala que ya han aparecido: (pieza, sitio, contexto)."""
+        m = self.m
+        dia = int(m.dia)
+        out, cuenta = [], {}
+        for mu in m.muebles_de(sala):
+            pieza = str(mu.get("pieza", "")).lower()
+            if pieza not in MU.PIEZAS:
+                aviso = "sala %s: no existe la pieza «%s»" % (sala.nombre, pieza)
+                if aviso not in m.avisos:
+                    m.avisos.append(aviso)
+                continue
+            try:
+                aparece = int(mu.get("aparece", 0))
+            except (TypeError, ValueError):
+                aparece = 0
+            if aparece > dia:
+                continue
+            k = cuenta[pieza] = cuenta.get(pieza, -1) + 1
+            out.append((pieza, mu.get("sitio"), MU.Contexto(self, dia, aparece, k)))
+        return out
+
     def _muebles(self, s, sala, r, suelo_y):
-        dia = int(self.m.dia)
-        clave = sala.clave
-        if sala.principal and clave not in ("reuniones", "despacho"):
-            self._escritorio(s, r.x + 12, suelo_y)
-            self._escritorio(s, r.x + 52, suelo_y)
-            self._planta(s, r.right - 14, suelo_y, 0 if dia < 90 else 1 if dia < 240 else 2)
-            self._cuadro(s, r.centerx - 6, r.y + 16, _hash(len(sala.nombre), self.m.semilla))
-        elif clave == "reuniones":
-            mesa = pygame.Rect(r.x + 16, suelo_y - 12, r.width - 32, 4)
-            pygame.draw.rect(s, MADERA, mesa)
-            pygame.draw.rect(s, MADERA_OSC, (mesa.x + 4, mesa.bottom, 3, 8))
-            pygame.draw.rect(s, MADERA_OSC, (mesa.right - 7, mesa.bottom, 3, 8))
-            pant = pygame.Rect(r.centerx - 22, r.y + 14, 44, 22)
-            pygame.draw.rect(s, (40, 40, 48), pant)
-            pygame.draw.rect(s, (30, 60, 110), pant.inflate(-4, -4))
-            for k, h in enumerate((5, 9, 7, 13, 11)):
-                pygame.draw.rect(s, (90, 200, 120), (pant.x + 6 + k * 7, pant.bottom - 4 - h, 4, h))
-        elif clave == "despacho":
-            self._escritorio(s, r.x + 14, suelo_y, grande=True)
-            # sillón
-            pygame.draw.rect(s, (40, 36, 40), (r.right - 26, suelo_y - 14, 12, 14))
-            pygame.draw.rect(s, (60, 54, 60), (r.right - 26, suelo_y - 14, 12, 4))
-            if dia >= 60:
-                self._planta(s, r.right - 8, suelo_y, 1)
-        elif clave == "comedor":
-            # nevera
-            pygame.draw.rect(s, (230, 232, 236), (r.x + 8, suelo_y - 34, 16, 34))
-            pygame.draw.line(s, (170, 170, 176), (r.x + 8, suelo_y - 22), (r.x + 23, suelo_y - 22))
-            pygame.draw.rect(s, (150, 150, 156), (r.x + 20, suelo_y - 30, 2, 5))
-            pygame.draw.rect(s, (150, 150, 156), (r.x + 20, suelo_y - 18, 2, 6))
-            # mesa larga
-            mesa = pygame.Rect(r.x + 36, suelo_y - 12, 60, 3)
-            pygame.draw.rect(s, MADERA, mesa)
-            for x in (mesa.x + 3, mesa.right - 6):
-                pygame.draw.rect(s, MADERA_OSC, (x, mesa.bottom, 3, 9))
-            for k in range(4):
-                pygame.draw.ellipse(s, (240, 240, 240), (mesa.x + 6 + k * 14, mesa.y - 2, 7, 2))
-            # encimera, microondas y cafetera
-            enc = pygame.Rect(r.right - 44, suelo_y - 14, 40, 14)
-            pygame.draw.rect(s, MADERA_OSC, enc)
-            pygame.draw.rect(s, (150, 150, 158), (enc.x + 3, enc.y - 11, 18, 11))
-            pygame.draw.rect(s, (40, 50, 60), (enc.x + 5, enc.y - 9, 10, 7))
-            s.set_at((enc.x + 18, enc.y - 6), (90, 230, 120))
-            pygame.draw.rect(s, (40, 36, 36), (enc.x + 27, enc.y - 13, 8, 13))
-            pygame.draw.rect(s, (240, 240, 240), (enc.x + 29, enc.y - 4, 3, 3))
-        elif clave == "planta2":
-            # fuente de agua
-            fx = r.x + 16
-            pygame.draw.rect(s, (225, 228, 232), (fx, suelo_y - 18, 12, 18))
-            pygame.draw.rect(s, (60, 120, 200), (fx + 4, suelo_y - 12, 4, 3))
-            pygame.draw.rect(s, (150, 200, 240), (fx + 1, suelo_y - 32, 10, 14))
-            pygame.draw.rect(s, (110, 170, 230), (fx + 1, suelo_y - 26, 10, 8))
-            pygame.draw.rect(s, (190, 225, 250), (fx + 3, suelo_y - 31, 2, 10))
-            self._planta(s, r.right - 14, suelo_y, 1)
-        elif clave == "despensa":
-            for k in range(3 if dia > 60 else 2):
-                x = r.x + 8 + k * 14
-                pygame.draw.ellipse(s, (200, 170, 100), (x, suelo_y - 12, 12, 12))
-                pygame.draw.rect(s, (160, 130, 70), (x + 3, suelo_y - 15, 6, 4))
-        elif clave == "hongos":
-            for k in range(5):
-                x = r.x + 10 + k * 16
-                pygame.draw.rect(s, (235, 225, 200), (x + 3, suelo_y - 7, 3, 7))
-                pygame.draw.ellipse(s, (200, 50, 50) if k % 2 == 0 else (190, 140, 90), (x, suelo_y - 11, 9, 6))
-                s.set_at((x + 3, suelo_y - 10), (255, 255, 255))
-        elif clave in ("almacen", "biblioteca", "museo"):
-            for k in range(2):
-                ex = r.x + 8 + k * 30
-                pygame.draw.rect(s, MADERA_OSC, (ex, suelo_y - 30, 22, 30), 2)
-                for fila in range(3):
-                    yy = suelo_y - 28 + fila * 9
-                    pygame.draw.line(s, MADERA_OSC, (ex, yy + 8), (ex + 21, yy + 8))
-                    if clave != "museo":
-                        for libro in range(5):
-                            pygame.draw.rect(s, COLORES_FIESTA[(libro + fila + k) % 6],
-                                             (ex + 3 + libro * 3, yy + 2, 2, 6))
-            if clave == "museo":
-                hallados = [o for o in self.m.plan.objetos if o[5] <= self.m.dia]
-                for i, (x, y, nombre, icono, col, d) in enumerate(hallados[:12]):
-                    ex = r.x + 8 + (i // 6) * 30 + 3 + (i % 2) * 9
-                    yy = suelo_y - 27 + ((i % 6) // 2) * 9
-                    self._objeto(s, ex, yy, nombre, rgb(col))
-
-    def _escritorio(self, s, x, suelo_y, grande=False):
-        w = 34 if grande else 26
-        pygame.draw.rect(s, MADERA, (x, suelo_y - 11, w, 3))
-        pygame.draw.rect(s, MADERA_OSC, (x + 1, suelo_y - 8, 2, 8))
-        pygame.draw.rect(s, MADERA_OSC, (x + w - 3, suelo_y - 8, 2, 8))
-        pygame.draw.rect(s, (30, 30, 36), (x + 6, suelo_y - 23, 14, 10))
-        pygame.draw.rect(s, (60, 110, 170), (x + 7, suelo_y - 22, 12, 8))
-        pygame.draw.rect(s, (30, 30, 36), (x + 12, suelo_y - 13, 2, 2))
-        pygame.draw.rect(s, (200, 200, 205), (x + 5, suelo_y - 12, 10, 1))
-        # silla
-        pygame.draw.rect(s, (50, 50, 60), (x + w + 2, suelo_y - 14, 3, 8))
-        pygame.draw.rect(s, (50, 50, 60), (x + w - 3, suelo_y - 7, 8, 2))
-        pygame.draw.line(s, (40, 40, 48), (x + w + 1, suelo_y - 5), (x + w + 1, suelo_y - 1))
-
-    def _planta(self, s, x, suelo_y, etapa):
-        pygame.draw.polygon(s, (180, 90, 50), [(x - 4, suelo_y - 7), (x + 4, suelo_y - 7), (x + 3, suelo_y),
-                                               (x - 3, suelo_y)])
-        hojas = [(6, 3), (12, 5), (18, 7)][etapa]
-        r = random.Random(x)
-        for _ in range(hojas[0] * 2):
-            ang = r.uniform(math.pi * 1.05, math.pi * 1.95)
-            d = r.uniform(2, hojas[0])
-            pygame.draw.circle(s, r.choice([(60, 150, 60), (90, 180, 70), (40, 120, 50)]),
-                               (x + int(math.cos(ang) * d * 0.8), suelo_y - 7 + int(math.sin(ang) * d)), 2)
-
-    def _cuadro(self, s, x, y, h):
-        marcos = [(150, 110, 60), (200, 170, 60), (170, 170, 175)]
-        pygame.draw.rect(s, marcos[h % 3], (x, y, 14, 11))
-        dentro = pygame.Rect(x + 2, y + 2, 10, 7)
-        pygame.draw.rect(s, (120, 180, 220), dentro)
-        pygame.draw.polygon(s, (70, 130, 70), [(dentro.x, dentro.bottom), (dentro.x + 4, dentro.y + 3),
-                                               (dentro.right, dentro.bottom)])
-        s.set_at((dentro.right - 2, dentro.y + 1), (255, 230, 90))
+        for pieza, sitio, ctx in self._piezas(sala):
+            x, y = MU.colocar(pieza, sitio, r)
+            MU.PIEZAS[pieza][3](s, x, y, r, ctx)
 
     # ================================================================ fotograma
 
@@ -1279,6 +1193,16 @@ class Render:
 
     # ---------------------------------------------------------------- salas (lo que se mueve)
 
+    def _piezas_vivas(self, sala):
+        """Las piezas animadas de la sala (se recalcula una vez al día)."""
+        clave = (sala.clave, int(self.m.dia))
+        cache = self.__dict__.setdefault("_cache_vivas", {})
+        if clave not in cache:
+            if len(cache) > 200:
+                cache.clear()
+            cache[clave] = [p for p in self._piezas(sala) if MU.PIEZAS[p[0]][4]]
+        return cache[clave]
+
     def _salas_vivas(self, t):
         m = self.m
         dst = self.dst
@@ -1299,24 +1223,17 @@ class Render:
                                                           (lx - 2, r.y + 8)])
                 dst.fill((255, 240, 170), (lx - 1, r.y + 12, 3, 2))
                 dst.blit(self.halo_lampara, (lx - 26, r.y - 10), special_flags=pygame.BLEND_ADD)
-            # pantallas de los ordenadores que parpadean un poco
-            if sala.principal and sala.clave not in ("reuniones", "despacho"):
-                for ex in (r.x + 12, r.x + 52):
-                    if int(t * 3 + ex) % 7 == 0:
-                        dst.fill((90, 150, 210), (ex + 7, suelo - 22, 12, 8))
-            if sala.clave == "comedor":  # vapor de la cafetera
-                cx = r.right - 44 + 31
-                for k in range(3):
-                    fase = (t * 0.8 + k / 3) % 1
-                    dst.fill((200, 200, 200), (cx + int(math.sin(fase * 6 + k) * 2), suelo - 18 - int(fase * 14), 1, 2))
-            if sala.clave == "planta2" and int(t * 2) % 3 == 0:
-                dst.fill((210, 235, 255), (r.x + 20, suelo - 28 + int(t * 6) % 8, 2, 2))
+            # lo que se mueve en los muebles (pantallas, vapor, burbujas, relojes)
+            for pieza, sitio, ctx in self._piezas_vivas(sala):
+                x, y = MU.colocar(pieza, sitio, r)
+                MU.PIEZAS[pieza][4](dst, x, y, r, ctx, t)
+            festiva = sala.funcion in ("trabajo", "comedor", "reuniones", "despacho")
             # fiestas dentro de las salas
             if "navidad" in deco:
                 for k, x in enumerate(range(r.x + 6, r.right - 6, 6)):
                     if (int(t * 2) + k) % 3:
                         dst.fill(COLORES_FIESTA[k % 6], (x, r.y + 14 + (k % 2), 2, 2))
-                if sala.principal or sala.clave == "comedor":
+                if festiva:
                     self._pino(dst, r.right - 34, suelo)
             if "feria" in deco:
                 for k, x in enumerate(range(r.x + 8, r.right - 8, 10)):
@@ -1325,14 +1242,14 @@ class Render:
             if "halloween" in deco:
                 for i in range(6):
                     pygame.draw.line(dst, (200, 200, 200), (r.x + 2, r.y + 2), (r.x + 2 + i * 3, r.y + 18 - i * 2))
-                if sala.principal or sala.clave == "comedor":
+                if festiva:
                     dst.blit(self.S["calabaza"], (r.right - 24, suelo - 14))
-            if ("andalucia" in deco or "espana" in deco) and sala.principal:
+            if ("andalucia" in deco or "espana" in deco) and festiva:
                 cols = ((40, 150, 70), (245, 245, 245), (40, 150, 70)) if "andalucia" in deco else \
                     ((200, 30, 40), (250, 200, 30), (200, 30, 40))
                 for k, c in enumerate(cols):
                     dst.fill(c, (r.x + 6, r.y + 16 + k * 3, 12, 3))
-            if "nochevieja" in deco and sala.clave == "comedor":
+            if "nochevieja" in deco and sala.funcion == "comedor":
                 for k in range(12):
                     pygame.draw.circle(dst, (130, 190, 70), (r.x + 44 + k * 4, suelo - 14), 2)
             if "carnaval" in deco:

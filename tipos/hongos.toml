@@ -1,0 +1,7 @@
+funcion = "otra"
+paredes = "piedra"
+suelo = "tierra"
+
+[[mueble]]
+pieza = "setas"
+sitio = "centro"

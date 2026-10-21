@@ -98,7 +98,9 @@ class Hormiga:
     def llevar(self, m, cosa):
         self.tarea = None
         self.carga_cosa = cosa
-        destino = m.sala_por_clave.get("despensa") or m.sala_por_clave.get("comedor")
+        destino = m.almacen_comida()
+        if destino is None:
+            return
         arte = cosa.arte[0]
         self.ir(m, m.punto_libre(destino, self.rng, self), "guardar",
                 carga=arte if len(arte) <= 6 else arte[:6])
@@ -134,7 +136,7 @@ class Hormiga:
         self.ir(m, m.punto_libre(sala, self.rng, self), motivo)
 
     def sala_propia(self, m):
-        return m.sala_por_clave.get(self.sala) or m.sala_por_clave.get("comedor")
+        return m.sala_por_clave.get(self.sala) or m.refugio()
 
     # ------------------------------------------------------------ destinos
 
@@ -156,7 +158,9 @@ class Hormiga:
             if rng.random() < 0.9 and casa:
                 self.durmiendo = True
                 return self.ir(m, m.punto_libre(casa, rng, self), "dormir")
-            return self.ir(m, m.sala_por_clave["comedor"].punto(rng), "trasnochar")
+            refugio = m.refugio()
+            if refugio:
+                return self.ir(m, refugio.punto(rng), "trasnochar")
 
         if self.nombre in m.cumples and rng.random() < 0.7:
             return self.ir(m, (m.x_cumple + rng.randint(-2, 16), -1), "cumple")
@@ -173,14 +177,15 @@ class Hormiga:
         if casa:
             opciones.append(("casa", 5.0))
         for s in m.salas:
-            if s.principal and s is not casa:
-                opciones.append((s, 1.0))
-            elif s.clave == "comedor":
-                peso = 12.0 if 13.5 <= hora <= 15.5 else 5.0 if 10.5 <= hora <= 11.0 else 1.0
-                opciones.append((s, peso))
-            elif s.clave == "planta2":
+            if s is casa:
+                continue
+            if s.funcion == "comedor":
+                opciones.append((s, m.ganas_de_comer(hora)))
+            elif s.funcion == "agua":
                 opciones.append((s, 1.8))
-            elif not s.principal:
+            elif s.principal:
+                opciones.append((s, 1.0))
+            else:
                 opciones.append((s, 0.5))
         if m.frente:
             opciones.append(("obra", 1.5))
@@ -213,13 +218,14 @@ class Hormiga:
             return self.ir(m, (x, -1), destino)
         if destino == "forrajear":
             x = rng.randrange(4, m.plan_ancho - 4)
-            despensa = m.sala_por_clave.get("despensa") or m.sala_por_clave["comedor"]
-            self.siguiente = ("guardar", despensa.punto(rng), rng.choice("•°"))
+            despensa = m.almacen_comida()
+            if despensa:
+                self.siguiente = ("guardar", despensa.punto(rng), rng.choice("•°"))
             return self.ir(m, (x, -1), "forrajear")
         if destino == "felicitar":
             return self.ir(m, (m.x_cumple + rng.randint(0, 16), -1), "felicitar")
         s = destino
-        return self.ir(m, m.punto_libre(s, rng, self), "agua" if s.clave == "planta2" else s.clave)
+        return self.ir(m, m.punto_libre(s, rng, self), "agua" if s.funcion == "agua" else s.clave)
 
     def ir(self, m, destino, actividad, carga=None):
         ruta = m.plan.camino((self.x, self.y), destino)
@@ -296,7 +302,10 @@ class Hormiga:
             m.vida.soltar(self)
             self.tarea = None
             self.siguiente = None
-            return self.ir(m, m.punto_libre(m.sala_por_clave["comedor"], self.rng, self), "refugio")
+            refugio = m.refugio()
+            if refugio:
+                return self.ir(m, m.punto_libre(refugio, self.rng, self), "refugio")
+            return self.ir(m, (m.plan.entrada, -1), "refugio")
         # cazando o defendiendo: si el bicho se mueve, recalcula el camino
         if self.tarea is not None and self.actividad in ("cazar", "defender"):
             self.repensar -= dt

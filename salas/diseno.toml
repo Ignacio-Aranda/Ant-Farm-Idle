@@ -4,10 +4,10 @@
 # =====================================================================
 
 nombre = "Diseño"
-posicion = 2
 color = "magenta_brillante"
-nivel = 2
+planta = 2
 ancho = 34
+tipo = "trabajo"
 
 [[miembro]]
 nombre = "Diego"

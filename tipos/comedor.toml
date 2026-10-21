@@ -1,0 +1,16 @@
+# Comedor: nevera, mesa larga y encimera con microondas y cafetera.
+funcion = "comedor"
+paredes = "madera"
+suelo = "madera"
+
+[[mueble]]
+pieza = "nevera"
+sitio = "izquierda"
+
+[[mueble]]
+pieza = "mesa_comedor"
+sitio = "centro"
+
+[[mueble]]
+pieza = "encimera"
+sitio = "derecha"

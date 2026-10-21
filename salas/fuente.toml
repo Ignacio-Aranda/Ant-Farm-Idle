@@ -1,0 +1,10 @@
+# =====================================================================
+#  LA FUENTE · de vez en cuando bajan a por agua.
+#  Mismo formato que salas/desarrollo.toml (allí está explicado).
+# =====================================================================
+
+nombre = "Fuente"
+color = "blanco"
+planta = 4
+ancho = 28
+tipo = "fuente"

@@ -3,7 +3,16 @@
 #  Cada [[miembro]] es una hormiga. Para mover a alguien de sala, corta su
 #  bloque y pégalo en el fichero de la otra sala. Para quitar a alguien,
 #  bórralo de aquí y añádelo a idos.toml (así tendrá su tumba).
-#  Los cambios se aplican solos a los pocos segundos de guardar.
+#  Los cambios de gente se aplican solos a los pocos segundos de guardar;
+#  si cambias planta, x, ancho o tipo, reinicia el hormiguero.
+#
+#  Dónde va la sala:
+#  planta : 1 (la más alta, junto a la superficie) a 4 (la más honda)
+#  x      : opcional, columna del borde izquierdo (de 3 a ~150). Sin x, va en un
+#           hueco al azar de su planta. Los túneles se trazan solos.
+#  ancho  : anchura de la sala (en columnas)
+#  tipo   : el tipo de sala (tipos/*.toml): trabajo, reuniones, despacho,
+#           comedor, fuente... Decide los muebles y qué hacen las hormigas aquí.
 #
 #  nombre : como aparece en el hormiguero
 #  cumple : "DD-MM" (día-mes) -> ese día lleva gorro de fiesta y hay tarta arriba
@@ -17,10 +26,10 @@
 # =====================================================================
 
 nombre = "Desarrollo"
-posicion = 1
 color = "cian"
-nivel = 2               # 1 (arriba, con el comedor) o 2
-ancho = 40              # anchura de la sala
+planta = 2
+ancho = 40
+tipo = "trabajo"
 
 [[miembro]]
 nombre = "Ana"

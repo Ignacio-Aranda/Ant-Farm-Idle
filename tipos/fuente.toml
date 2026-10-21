@@ -1,0 +1,12 @@
+# La fuente de agua: paredes de azulejo, suelo de baldosa, la fuente y una planta.
+funcion = "agua"
+paredes = "azulejo"
+suelo = "baldosa"
+
+[[mueble]]
+pieza = "fuente"
+sitio = "izquierda"
+
+[[mueble]]
+pieza = "planta"
+sitio = "derecha"

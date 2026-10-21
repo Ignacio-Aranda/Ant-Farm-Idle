@@ -1,0 +1,12 @@
+funcion = "despensa"
+paredes = "madera"
+suelo = "tierra"
+
+[[mueble]]
+pieza = "sacos"
+sitio = "izquierda"
+
+[[mueble]]
+pieza = "sacos"
+sitio = "centro"
+aparece = 60

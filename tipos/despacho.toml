@@ -1,0 +1,17 @@
+# Despacho: escritorio grande, sillón y, a los dos meses, una planta.
+funcion = "despacho"
+paredes = "madera"
+suelo = "madera"
+
+[[mueble]]
+pieza = "escritorio_grande"
+sitio = "izquierda"
+
+[[mueble]]
+pieza = "sillon"
+sitio = "centro_derecha"
+
+[[mueble]]
+pieza = "planta"
+sitio = "derecha"
+aparece = 60

@@ -5,10 +5,10 @@
 # =====================================================================
 
 nombre = "Reuniones"
-posicion = 1
 color = "azul_brillante"
-nivel = 1
+planta = 1
 ancho = 30
+tipo = "reuniones"
 
 # Reuniones fijas: a esa hora las hormigas citadas vienen a la sala.
 #   dia     : lunes, martes, miércoles, jueves, viernes o "todos" (de lunes a viernes)
