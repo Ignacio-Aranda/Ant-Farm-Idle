@@ -4,7 +4,7 @@
 #  - crea el servicio "hormiguero", que pinta en la pantalla de la Pi (tty1),
 #    arranca al encender y se relanza solo si se cierra
 #  - la pantalla no se apaga nunca
-# Uso (en la Pi):  bash ~/hormiguero/instalar-pi.sh
+# Uso (en la Pi):  bash ~/Ant-Farm-Idle/instalar-pi.sh
 # Luego, desde SSH:
 #   sudo systemctl restart hormiguero     (re)lanzarlo en la pantalla
 #   sudo systemctl stop hormiguero        pararlo
@@ -17,11 +17,6 @@ echo "== Instalando pygame y la fuente DejaVu"
 sudo apt-get update
 sudo apt-get install -y python3-pygame fonts-dejavu-core
 chmod +x "$DIR"/*.sh "$DIR"/*.py
-
-echo "== Quitando el arranque anterior (inicio de sesión automático), si estaba"
-sed -i '/# hormiguero-autoarranque/,/^fi$/d' ~/.bash_profile 2>/dev/null || true
-rm -f "$DIR/arrancar-pi.sh"
-sudo raspi-config nonint do_boot_behaviour B1   # consola pidiendo usuario (sin autologin)
 
 echo "== Servicio hormiguero"
 sudo tee /etc/systemd/system/hormiguero.service >/dev/null <<EOF

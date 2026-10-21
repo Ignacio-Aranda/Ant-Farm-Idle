@@ -486,6 +486,13 @@ class Render:
         anchos = [max(5, len(n) + 2) for n in m.idos]
         total = sum(anchos) + len(anchos) + 3
         x = min(sup.cementerio_x, m.plan_ancho - total - 2)
+        # que no quede encima de una salida (los montículos de tierra la taparían)
+        def choca(x0):
+            return any(x0 - 8 <= s <= x0 + total + 8 for s in m.salidas_x_grid)
+        if choca(x):
+            libres = [x0 for x0 in range(2, m.plan_ancho - total - 2) if not choca(x0)]
+            if libres:
+                x = min(libres, key=lambda x0: abs(x0 - x))
         x0 = self.px(x)
         # valla
         ancho_px = self.px(total)
