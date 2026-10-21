@@ -30,6 +30,7 @@ jornada = "09:00-18:00"    # quien es jefe sólo llama al despacho en este horar
 
 [nido]
 entrada = 20               # columna preferida para la entrada (de 3 a 156)
+dias = 365                 # en cuántos días excavan las salas del año (una cada dias/N días)
 # Salas que excavan a lo largo del año, en orden (cada una usa el tipo de su nombre):
 obras = ["despensa", "museo", "hongos", "almacen", "biblioteca"]
 
