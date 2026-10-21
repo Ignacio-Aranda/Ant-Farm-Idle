@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+capturas/
+*.log
+.venv/
+# datos locales que no se suben (pon aquí tu configuración real si no quieres publicarla)
+local/

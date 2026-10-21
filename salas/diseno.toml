@@ -1,0 +1,22 @@
+# =====================================================================
+#  SALA DE DISEÑO  ·  sala de trabajo
+#  Mismo formato que salas/desarrollo.toml (allí está explicado).
+# =====================================================================
+
+nombre = "Diseño"
+posicion = 2
+color = "magenta_brillante"
+nivel = 2
+ancho = 34
+
+[[miembro]]
+nombre = "Diego"
+cumple = "18-08"
+
+[[miembro]]
+nombre = "Lucía"
+cumple = "05-12"
+
+[[miembro]]
+nombre = "Hugo"
+cumple = "27-04"

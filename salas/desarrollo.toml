@@ -1,0 +1,45 @@
+# =====================================================================
+#  SALA DE DESARROLLO  ·  sala de trabajo
+#  Cada [[miembro]] es una hormiga. Para mover a alguien de sala, corta su
+#  bloque y pégalo en el fichero de la otra sala. Para quitar a alguien,
+#  bórralo de aquí y añádelo a idos.toml (así tendrá su tumba).
+#  Los cambios se aplican solos a los pocos segundos de guardar.
+#
+#  nombre : como aparece en el hormiguero
+#  cumple : "DD-MM" (día-mes) -> ese día lleva gorro de fiesta y hay tarta arriba
+#  color  : opcional (rojo_brillante, amarillo_brillante, cian, magenta_brillante,
+#           verde_brillante, naranja, azul_brillante, rosa, turquesa, lima, dorado...)
+#  alta   : opcional, "AAAA-MM-DD" si llega más tarde (sale en el diario)
+#
+#  Que una hormiga sea de esta sala no significa que esté siempre aquí:
+#  es donde más tiempo pasa, pero también va al comedor, a la fuente a
+#  por agua, a las otras salas, a cavar y a buscar comida fuera.
+# =====================================================================
+
+nombre = "Desarrollo"
+posicion = 1
+color = "cian"
+nivel = 2               # 1 (arriba, con el comedor) o 2
+ancho = 40              # anchura de la sala
+
+[[miembro]]
+nombre = "Ana"
+cumple = "14-03"
+
+[[miembro]]
+nombre = "Luis"
+cumple = "02-07"
+color = "naranja"
+
+[[miembro]]
+nombre = "Marta"
+cumple = "23-11"
+
+[[miembro]]
+nombre = "Pablo"
+cumple = "09-05"
+
+[[miembro]]
+nombre = "Sara"
+cumple = "30-01"
+alta = "2026-03-01"

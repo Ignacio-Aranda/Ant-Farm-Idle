@@ -1,0 +1,105 @@
+# =====================================================================
+#  CALENDARIO DE FIESTAS DEL HORMIGUERO
+#  Cada [[fiesta]] decora el hormiguero entre "desde" y "hasta" (incluidos).
+#  En ejemplos/ hay otro calendario más completo (fiestas de Andalucía y de España).
+#
+#  Fechas:  "DD-MM"            -> fecha fija, p. ej. "14-02"
+#           "pascua+N" / "-N"  -> relativa al Domingo de Resurrección
+#  Un rango puede cruzar el año: desde = "15-12", hasta = "06-01".
+#
+#  decoracion: navidad, nochevieja, reyes, halloween, difuntos, andalucia,
+#              espana, semana_santa, feria, carnaval, san_juan, cruces,
+#              corazones, libro, pi, banderines (genérica)
+#  gorro (opcional): el sombrero que llevan las hormigas ese día:
+#              fiesta, papa_noel, corona, capirote, bruja, flor, antifaz
+#  mensaje: sale de día en el cielo y en el diario.
+# =====================================================================
+
+[[fiesta]]
+nombre = "Navidad"
+desde = "15-12"
+hasta = "06-01"
+decoracion = "navidad"
+mensaje = "¡Feliz Navidad desde el hormiguero!"
+
+[[fiesta]]
+nombre = "Nochebuena y Navidad"
+desde = "24-12"
+hasta = "25-12"
+decoracion = "navidad"
+gorro = "papa_noel"
+mensaje = "¡Feliz Navidad!"
+
+[[fiesta]]
+nombre = "Nochevieja"
+desde = "31-12"
+hasta = "01-01"
+decoracion = "nochevieja"
+gorro = "fiesta"
+mensaje = "¡Feliz Año Nuevo!"
+
+[[fiesta]]
+nombre = "Reyes Magos"
+desde = "05-01"
+hasta = "06-01"
+decoracion = "reyes"
+gorro = "corona"
+mensaje = "¡Han venido los Reyes Magos!"
+
+[[fiesta]]
+nombre = "Carnaval"
+desde = "pascua-49"
+hasta = "pascua-47"
+decoracion = "carnaval"
+gorro = "antifaz"
+mensaje = "¡Carnaval!"
+
+[[fiesta]]
+nombre = "San Valentín"
+desde = "14-02"
+hasta = "14-02"
+decoracion = "corazones"
+mensaje = "Feliz San Valentín"
+
+[[fiesta]]
+nombre = "Día de Pi"
+desde = "14-03"
+hasta = "14-03"
+decoracion = "pi"
+mensaje = "Feliz día de π = 3,14159..."
+
+[[fiesta]]
+nombre = "Día del Libro"
+desde = "23-04"
+hasta = "23-04"
+decoracion = "libro"
+mensaje = "Día del Libro"
+
+[[fiesta]]
+nombre = "Día de Internet"
+desde = "17-05"
+hasta = "17-05"
+decoracion = "banderines"
+mensaje = "Feliz Día de Internet"
+
+[[fiesta]]
+nombre = "Noche de San Juan"
+desde = "23-06"
+hasta = "24-06"
+decoracion = "san_juan"
+mensaje = "Noche de San Juan"
+
+[[fiesta]]
+nombre = "Halloween"
+desde = "25-10"
+hasta = "31-10"
+decoracion = "halloween"
+mensaje = "Feliz Halloween"
+
+[[fiesta]]
+nombre = "Noche de Halloween"
+desde = "31-10"
+hasta = "31-10"
+decoracion = "halloween"
+gorro = "bruja"
+mensaje = "¡Truco o trato!"

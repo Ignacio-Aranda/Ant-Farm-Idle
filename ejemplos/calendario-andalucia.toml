@@ -1,0 +1,267 @@
+# =====================================================================
+#  CALENDARIO DE EJEMPLO: FIESTAS DE ANDALUCÍA Y DE ESPAÑA
+#  Para usarlo, cópialo encima de calendario.toml (o arranca con --calendario).
+#  Cada [[fiesta]] decora el hormiguero entre "desde" y "hasta" (incluidos).
+#
+#  Fechas:  "DD-MM"            -> fecha fija, p. ej. "28-02"
+#           "pascua+N" / "-N"  -> relativa al Domingo de Resurrección
+#                                  (Semana Santa, Carnaval, Feria de Abril, Corpus, Rocío)
+#  Un rango puede cruzar el año: desde = "01-12", hasta = "06-01".
+#
+#  decoracion: navidad, nochevieja, reyes, halloween, difuntos, andalucia,
+#              espana, semana_santa, feria, carnaval, san_juan, cruces,
+#              corazones, libro, pi, banderines (genérica)
+#  gorro (opcional): el sombrero que llevan las hormigas ese día:
+#              fiesta, papa_noel, corona, capirote, bruja, flor, antifaz
+#  mensaje: sale de día en el cielo y en el diario.
+#
+#  OJO: las ferias que no dependen de la Pascua cambian un poco cada año.
+#  Revisa las fechas cada enero (las de 2026 están comprobadas).
+# =====================================================================
+
+# ------------------------------------------------------------ invierno
+[[fiesta]]
+nombre = "Navidad"
+desde = "28-11"            # cuando se encienden las luces de calle Larios
+hasta = "06-01"
+decoracion = "navidad"
+mensaje = "¡Feliz Navidad desde el hormiguero!"
+
+[[fiesta]]
+nombre = "Nochebuena y Navidad"
+desde = "24-12"
+hasta = "25-12"
+decoracion = "navidad"
+gorro = "papa_noel"
+mensaje = "¡Feliz Navidad!"
+
+[[fiesta]]
+nombre = "Nochevieja"
+desde = "31-12"
+hasta = "01-01"
+decoracion = "nochevieja"
+gorro = "fiesta"
+mensaje = "¡Feliz Año Nuevo!"
+
+[[fiesta]]
+nombre = "Día de la Toma de Granada"
+desde = "02-01"
+hasta = "02-01"
+decoracion = "banderines"
+mensaje = "Día de la Toma · Granada"
+lugar = "Granada"
+
+[[fiesta]]
+nombre = "Reyes Magos"
+desde = "05-01"
+hasta = "06-01"
+decoracion = "reyes"
+gorro = "corona"
+mensaje = "¡Han venido los Reyes Magos!"
+
+[[fiesta]]
+nombre = "Carnaval de Cádiz"
+desde = "pascua-52"
+hasta = "pascua-42"
+decoracion = "carnaval"
+gorro = "antifaz"
+mensaje = "¡Carnaval de Cádiz! ¡Ay, Cádiz!"
+lugar = "Cádiz"
+
+[[fiesta]]
+nombre = "San Valentín"
+desde = "14-02"
+hasta = "14-02"
+decoracion = "corazones"
+mensaje = "Feliz San Valentín"
+
+[[fiesta]]
+nombre = "Día de Andalucía"
+desde = "27-02"
+hasta = "28-02"
+decoracion = "andalucia"
+mensaje = "¡Feliz Día de Andalucía! · 28F"
+
+# ------------------------------------------------------------ primavera
+[[fiesta]]
+nombre = "Día Internacional de la Mujer"
+desde = "08-03"
+hasta = "08-03"
+decoracion = "banderines"
+mensaje = "8M · Día Internacional de la Mujer"
+
+[[fiesta]]
+nombre = "Día de Pi"
+desde = "14-03"
+hasta = "14-03"
+decoracion = "pi"
+mensaje = "Feliz día de π = 3,14159..."
+
+[[fiesta]]
+nombre = "Semana Santa"
+desde = "pascua-7"
+hasta = "pascua"
+decoracion = "semana_santa"
+mensaje = "Semana Santa en Málaga"
+lugar = "Málaga"
+
+[[fiesta]]
+nombre = "Procesión"
+desde = "pascua-3"
+hasta = "pascua-2"
+decoracion = "semana_santa"
+gorro = "capirote"
+mensaje = "Jueves y Viernes Santo"
+
+[[fiesta]]
+nombre = "Feria de Abril"
+desde = "pascua+16"        # 2026: del 21 al 26 de abril
+hasta = "pascua+21"
+decoracion = "feria"
+gorro = "flor"
+mensaje = "¡Feria de Abril de Sevilla!"
+lugar = "Sevilla"
+
+[[fiesta]]
+nombre = "Día del Libro"
+desde = "23-04"
+hasta = "23-04"
+decoracion = "libro"
+mensaje = "Día del Libro"
+
+[[fiesta]]
+nombre = "Cruces de Mayo"
+desde = "01-05"
+hasta = "03-05"
+decoracion = "cruces"
+mensaje = "Cruces de Mayo · Córdoba y Granada"
+lugar = "Córdoba"
+
+[[fiesta]]
+nombre = "Patios de Córdoba"
+desde = "04-05"
+hasta = "17-05"
+decoracion = "cruces"
+mensaje = "Fiesta de los Patios · Córdoba"
+lugar = "Córdoba"
+
+[[fiesta]]
+nombre = "Día de Internet"
+desde = "17-05"
+hasta = "17-05"
+decoracion = "banderines"
+mensaje = "Feliz Día de Internet"
+
+[[fiesta]]
+nombre = "Feria de Córdoba"
+desde = "23-05"
+hasta = "30-05"
+decoracion = "feria"
+gorro = "flor"
+mensaje = "Feria de Mayo · Córdoba"
+lugar = "Córdoba"
+
+[[fiesta]]
+nombre = "El Rocío"
+desde = "pascua+47"        # fin de semana de Pentecostés
+hasta = "pascua+50"
+decoracion = "banderines"
+gorro = "flor"
+mensaje = "Romería de El Rocío · Huelva"
+lugar = "Huelva"
+
+[[fiesta]]
+nombre = "Corpus de Granada"
+desde = "pascua+55"        # 2026: del 30 de mayo al 6 de junio
+hasta = "pascua+62"
+decoracion = "feria"
+gorro = "flor"
+mensaje = "Feria del Corpus · Granada"
+lugar = "Granada"
+
+# ------------------------------------------------------------ verano
+[[fiesta]]
+nombre = "Noche de San Juan"
+desde = "23-06"
+hasta = "24-06"
+decoracion = "san_juan"
+mensaje = "Noche de San Juan · ¡moraga en la playa!"
+lugar = "Málaga"
+
+[[fiesta]]
+nombre = "Colombinas"
+desde = "29-07"
+hasta = "04-08"
+decoracion = "feria"
+mensaje = "Fiestas Colombinas · Huelva"
+lugar = "Huelva"
+
+[[fiesta]]
+nombre = "Feria de Málaga"
+desde = "15-08"            # 2026: del 15 al 22 de agosto
+hasta = "22-08"
+decoracion = "feria"
+gorro = "flor"
+mensaje = "¡FERIA DE MÁLAGA! ¡Viva Málaga!"
+lugar = "Málaga"
+
+[[fiesta]]
+nombre = "Feria de Almería"
+desde = "22-08"
+hasta = "29-08"
+decoracion = "feria"
+mensaje = "Feria de Almería"
+lugar = "Almería"
+
+# ------------------------------------------------------------ otoño
+[[fiesta]]
+nombre = "Virgen de la Victoria"
+desde = "08-09"
+hasta = "08-09"
+decoracion = "banderines"
+mensaje = "Día de la Victoria, patrona de Málaga"
+lugar = "Málaga"
+
+[[fiesta]]
+nombre = "Fiesta Nacional de España"
+desde = "12-10"
+hasta = "12-10"
+decoracion = "espana"
+mensaje = "12 de octubre · Fiesta Nacional"
+
+[[fiesta]]
+nombre = "Feria de San Lucas"
+desde = "10-10"
+hasta = "19-10"
+decoracion = "feria"
+mensaje = "Feria de San Lucas · Jaén"
+lugar = "Jaén"
+
+[[fiesta]]
+nombre = "Halloween"
+desde = "25-10"
+hasta = "31-10"
+decoracion = "halloween"
+mensaje = "Feliz Halloween"
+
+[[fiesta]]
+nombre = "Noche de Halloween"
+desde = "31-10"
+hasta = "31-10"
+decoracion = "halloween"
+gorro = "bruja"
+mensaje = "¡Truco o trato!"
+
+[[fiesta]]
+nombre = "Todos los Santos"
+desde = "01-11"
+hasta = "02-11"
+decoracion = "difuntos"
+mensaje = "Todos los Santos"
+
+[[fiesta]]
+nombre = "Día de la Constitución"
+desde = "06-12"
+hasta = "06-12"
+decoracion = "espana"
+mensaje = "Día de la Constitución"

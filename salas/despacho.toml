@@ -1,0 +1,17 @@
+# =====================================================================
+#  DESPACHO  ·  la sala de quien dirige
+#  Con jefe = true, de vez en cuando llama a alguien al despacho
+#  (sale en el diario). Mismo formato que salas/desarrollo.toml.
+# =====================================================================
+
+nombre = "Despacho"
+posicion = 2
+color = "dorado"
+nivel = 1
+ancho = 22
+jefe = true
+
+[[miembro]]
+nombre = "Elena"
+cumple = "11-10"
+color = "dorado"

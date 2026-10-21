@@ -1,0 +1,17 @@
+# =====================================================================
+#  LOS QUE SE FUERON · cada [[ido]] tiene su tumba en el cementerio de arriba
+#  nombre   : lo que pone en la lápida
+#  fecha    : opcional, "AAAA-MM-DD". Si es futura, la hormiga sigue hasta ese
+#             día y entonces se va (sale en el diario). Sin fecha: ya se fue.
+#  epitafio : opcional
+#  Si alguien se va: bórralo de su sala y añádelo aquí.
+# =====================================================================
+
+[[ido]]
+nombre = "CARLOS"
+epitafio = "gone, but not forgotten"
+
+[[ido]]
+nombre = "IRENE"
+fecha = "2026-09-30"
+epitafio = "se fue a otra colonia"

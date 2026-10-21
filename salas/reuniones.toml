@@ -1,0 +1,31 @@
+# =====================================================================
+#  SALA DE REUNIONES
+#  No tiene miembros fijos: las hormigas vienen aquí a las reuniones.
+#  Mismo formato que salas/desarrollo.toml (allí está explicado).
+# =====================================================================
+
+nombre = "Reuniones"
+posicion = 1
+color = "azul_brillante"
+nivel = 1
+ancho = 30
+
+# Reuniones fijas: a esa hora las hormigas citadas vienen a la sala.
+#   dia     : lunes, martes, miércoles, jueves, viernes o "todos" (de lunes a viernes)
+#   hora    : "HH:MM"
+#   minutos : duración
+#   quien   : "todos", el nombre de una sala (desarrollo, diseno...)
+#             o una lista de nombres, p. ej. ["Elena", "Ana"]
+[[reunion]]
+nombre = "Reunión de equipo"
+dia = "lunes"
+hora = "10:00"
+minutos = 60
+quien = "todos"
+
+[[reunion]]
+nombre = "Revisión de diseño"
+dia = "jueves"
+hora = "12:00"
+minutos = 45
+quien = "diseno"
