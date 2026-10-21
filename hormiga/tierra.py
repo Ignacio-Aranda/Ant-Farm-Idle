@@ -2,7 +2,8 @@
 
 El nido inicial (las salas de salas/*.toml, cada una en su planta) ya existe
 el día 0: se colocan en la columna pedida o en un hueco al azar, y los túneles
-y las rampas entre plantas se trazan solos. A partir de ahí, a lo largo del año
+y las rampas entre plantas se trazan solos (se prueban varias colocaciones hasta
+que se llega andando a todas las salas). A partir de ahí, a lo largo del año
 se excavan salas nuevas, galerías y una segunda salida. Todo se calcula a
 partir de la semilla y la fecha de fundación, así que el hormiguero de un
 día concreto es siempre el mismo aunque la Pi se apague.
@@ -29,6 +30,7 @@ PISOS = {0: 0, 1: 8, 2: 18, 3: 28, 4: 38}   # fila del suelo de cada planta (0 =
 ENTRADA = 20                     # columna preferida para la entrada principal
 BORDE = 3                        # columnas que se dejan libres a cada lado
 GAP = 4                          # separación mínima entre salas
+INTENTOS = 12                    # colocaciones al azar del nido que se prueban
 
 # Salas que las hormigas excavan a lo largo del año (se pueden cambiar en config.toml)
 OBRAS = [
@@ -70,12 +72,17 @@ class Sala:
     def y0(self):
         return self.piso - self.alto + 1
 
-    def punto(self, rng):
-        """Un sitio del suelo de la sala donde puede pararse una hormiga."""
+    def sitios(self):
+        """Las columnas del suelo de la sala donde puede pararse una hormiga."""
         a, b = self.x0 + 5, self.x0 + self.ancho - 6
         if a > b:   # sala muy estrecha: en el centro
             a = b = self.x0 + max(0, self.ancho) // 2
-        return (rng.randint(a, b), self.piso)
+        return range(a, b + 1)
+
+    def punto(self, rng):
+        """Un sitio del suelo de la sala donde puede pararse una hormiga."""
+        xs = self.sitios()
+        return (rng.randint(xs[0], xs[-1]), self.piso)
 
 
 class Obra:
@@ -148,8 +155,7 @@ class Plan:
         self.objetos = []
         self.salas_todas = []
         self.avisos = []
-        self._montar_nido(principales)
-        self._montar_obras(dias_obras)
+        self._montar(principales, dias_obras)
         self._poner_objetos()
         self._cavado = bytearray(ANCHO * PROF)
         self._dia_calc = None
@@ -219,6 +225,8 @@ class Plan:
             return False
         rng = random.Random("sala-%s-%s-%s" % (self.semilla, s.clave, self.intento))
         x0 = candidatos[0] if len(candidatos) == 1 else rng.choice(candidatos)
+        if self.intento >= INTENTOS:   # los dos últimos intentos, apretadas a un lado
+            x0 = candidatos[0] if self.intento == INTENTOS else candidatos[-1]
         s.x0, s.piso = x0, PISOS[nivel]
         s.nivel = nivel
         self._ocupar(nivel, x0, x0 + s.ancho - 1)
@@ -241,7 +249,8 @@ class Plan:
 
     def _elegir_rampa(self, arriba, abajo, cerca, sentido_previo):
         """Busca dónde poner la rampa de la planta `arriba` a la de `abajo` (0 = superficie):
-        que no atraviese salas y que alargue lo menos posible las galerías."""
+        que no atraviese salas y que alargue lo menos posible las galerías.
+        Devuelve (x, x2, sentido, libre); libre es False si no hay más remedio que atravesar alguna."""
         largo = 2 * (PISOS[abajo] - PISOS[arriba])
         mejor = None
         for x in range(BORDE, ANCHO - BORDE):
@@ -259,21 +268,81 @@ class Plan:
                 if mejor is None or coste < mejor[0]:
                     mejor = (coste, x, x2, sentido, libre)
         _, x, x2, sentido, libre = mejor
-        if not libre:
-            self.rampa_mala = abajo
-        return x, x2, sentido
+        return x, x2, sentido, libre
 
-    def _montar_nido(self, principales):
-        """Prueba varias colocaciones al azar hasta que todas las rampas quepan sin atravesar salas."""
-        for self.intento in range(12):
-            self.rampa_mala = None
-            self.avisos = []
-            self._probar_nido(principales)
-            if self.rampa_mala is None:
-                return
-        self.avisos.append("no hay sitio para una rampa sin atravesar una sala (planta %d)" % self.rampa_mala)
+    def _montar(self, principales, dias):
+        """Prueba varias colocaciones al azar del nido (con sus obras del año) y se queda con la
+        primera en la que se llega a todas las salas desde la entrada (el día 0 y al acabar el
+        año), ninguna rampa atraviesa una sala y caben todas. Si no hay ninguna así, con la mejor
+        en ese orden; y si todas dejan alguna sala sin camino, quita la sala que estorba (con el
+        aviso de que no cabe) y vuelve a probar."""
+        fuera = []
+        while True:
+            mejor = None
+            for intento in range(INTENTOS + 2):
+                nota = self._probar(principales, fuera, dias, intento, mejor and mejor[0])
+                if mejor is None or nota > mejor[0]:
+                    mejor = (nota, intento)
+                if nota == (True, True, len(principales) - len(fuera)):
+                    break
+            if mejor[1] != intento:
+                self._probar(principales, fuera, dias, mejor[1])
+            quitar = None if mejor[0][0] else self._estorbo()
+            if quitar is None:
+                break
+            fuera.append(quitar)
+        if self.rampa_mala is not None:
+            self.avisos.append("no hay sitio para una rampa sin atravesar una sala (planta %d)" % self.rampa_mala)
+        if self.aisladas:
+            self.avisos.append("no hay camino hasta: %s" % ", ".join(s.nombre for s in self.aisladas))
 
-    def _probar_nido(self, principales):
+    def _probar(self, principales, fuera, dias, intento, otra=None):
+        """Monta el nido y las obras con la colocación número `intento`. Devuelve lo buena que es:
+        (se llega a todas las salas, ninguna rampa atraviesa una sala, cuántas salas del nido caben).
+        Si ni con todo conectado sería mejor que la nota `otra`, no se buscan los caminos."""
+        self.intento = intento
+        self.rampa_mala = None
+        self.avisos = []
+        self.aisladas = []
+        self.rng = random.Random("plan-%s" % self.semilla)
+        self._probar_nido(principales, fuera)
+        self._montar_obras(dias)
+        nido = [s for s in self.salas_todas if s.principal]
+        nota = (self.rampa_mala is None, len(nido))
+        if otra is not None and (True,) + nota <= otra:
+            return (False,) + nota
+        self.aisladas = self._aisladas(self.obras[:1], nido) or self._aisladas(self.obras, self.salas_todas)
+        return (not self.aisladas,) + nota
+
+    def _aisladas(self, obras, salas):
+        """Las salas con algún sitio al que no se llega andando desde la entrada, con lo que
+        cavan esas obras."""
+        self._cavado = bytearray(ANCHO * PROF)
+        for o in obras:
+            for x, y in o.celdas:
+                self._cavado[y * ANCHO + x] = 1
+        llega = self.alcanzables((self.entrada, -1))
+        return [s for s in salas if any((x, s.piso) not in llega for x in s.sitios())]
+
+    def _estorbo(self):
+        """La sala del nido que hay que quitar para que quede conectado: una de las que atraviesa
+        la rampa mala (o de sus plantas) o, si no hay rampa mala, una a la que no se llega.
+        Mejor una sin columna fija y de las últimas en colocarse. None si no queda ninguna."""
+        nido = [s for s in self.salas_todas if s.principal]
+        if self.rampa_mala is not None:
+            n = self.rampa_mala
+            _, _, x, x2 = self.rampas[n - 1]
+            lo, hi = min(x, x2), max(x, x2)
+            cerca = [s for s in nido if s.nivel in (n - 1, n)]
+            candidatas = [s for s in cerca if not (hi + 1 < s.x0 or lo - 1 > s.x0 + s.ancho - 1)] or cerca
+        else:
+            candidatas = [s for s in self.aisladas if s.principal]
+        candidatas = candidatas or nido
+        if not candidatas:
+            return None
+        return max(enumerate(candidatas), key=lambda e: (e[1].clave not in self.fijas, e[0]))[1].clave
+
+    def _probar_nido(self, principales, fuera):
         self.obras = []
         self.ocupado = {n: [] for n in PISOS}
         self.tramo = {n: None for n in PISOS}     # (x_ini, x_fin) de la galería de cada planta
@@ -285,21 +354,28 @@ class Plan:
             s.color = d.get("color")
             s.tipo, s.funcion = d.get("tipo", "trabajo"), d.get("funcion", "trabajo")
             salas.append((s, nivel, d.get("x")))
+        self.fijas = {s.clave for s, nivel, x in salas if x is not None}
         # primero las que tienen columna fija, luego las demás (en orden de nombre de fichero)
         for s, nivel, x in sorted(salas, key=lambda e: (e[2] is None, e[0].clave)):
-            if self._colocar(s, nivel, x):
+            if s.clave in fuera:
+                self.avisos.append("%s no cabe en la planta %d (no deja sitio a las rampas)" % (s.nombre, nivel))
+            elif self._colocar(s, nivel, x):
                 colocadas.append(s)
         hondo = max([s.nivel for s in colocadas], default=1)
         # túneles: rampa desde la superficie y de cada planta a la siguiente
         celdas = []
-        x, x2, sentido = self._elegir_rampa(0, 1, self.entrada_preferida, 0)
+        x, x2, sentido, libre = self._elegir_rampa(0, 1, self.entrada_preferida, 0)
+        if not libre:
+            self.rampa_mala = 1
         self.entrada = x
         self.rampas = [(0, 1, x, x2)]
         celdas += rampa(x, 0, x2, PISOS[1])
         self._ocupar(1, x, x2)
         self.tramo[1] = _unir(self.tramo[1], (x2, x2))
         for n in range(1, hondo):
-            x, x2, sentido = self._elegir_rampa(n, n + 1, 0, sentido)
+            x, x2, sentido, libre = self._elegir_rampa(n, n + 1, 0, sentido)
+            if not libre:
+                self.rampa_mala = n + 1
             self.rampas.append((n, n + 1, x, x2))
             celdas += rampa(x, PISOS[n], x2, PISOS[n + 1])
             self.tramo[n] = _unir(self.tramo[n], (x, x))
@@ -338,9 +414,8 @@ class Plan:
     def _bajar_planta(self, obras):
         """Excava una rampa hasta la siguiente planta (vacía). False si no hay por dónde."""
         n = self.hondo
-        x, x2, _ = self._elegir_rampa(n, n + 1, 0, 0)
-        if self.rampa_mala == n + 1:
-            self.rampa_mala = None
+        x, x2, _, libre = self._elegir_rampa(n, n + 1, 0, 0)
+        if not libre:
             return False
         a, b = self.tramo[n]
         if not a <= x <= b:   # primero alargan la galería hasta donde empieza la rampa
@@ -354,36 +429,15 @@ class Plan:
         self.hondo = n + 1
         return True
 
-    def _montar_obras(self, dias):
-        rng = self.rng
-        obras = []
-        # salas nuevas, al lado de las galerías que ya hay (mejor en las plantas de abajo).
-        # Si no caben: abren una planta más honda con una rampa nueva, o la hacen más estrecha.
-        self.lado = -1
-        self.sin_sitio = []
-        for d in self.salas_obras:
-            ancho = int(d.get("ancho", 22))
-            hueco = self._hueco_obra(ancho)
-            while hueco is None and self.hondo < len(PISOS) - 1 and self._bajar_planta(obras):
-                hueco = self._hueco_obra(ancho)
-            while hueco is None and ancho > 14:
-                ancho -= 4
-                hueco = self._hueco_obra(ancho)
-            if hueco is None:
-                self.sin_sitio.append(d["nombre"])
-                continue
-            n, x0, gal = hueco
-            sala = Sala(d["clave"], d["nombre"], x0, PISOS[n], ancho)
-            sala.tipo, sala.funcion, sala.nivel = d.get("tipo", d["clave"]), d.get("funcion", d["clave"]), n
-            self._ocupar(n, x0, x0 + ancho - 1)
-            obras.append(Obra("galeria", "la galería de la planta %d" % n, gal))
-            obras.append(Obra("sala", d["nombre"], sala_celdas(sala), sala))
-            self.salas_todas.append(sala)
-        # segunda salida: desde la galería de la planta 1 hacia arriba, lejos de la entrada
+    def _salida(self, cavadas):
+        """(lejos, x, x2) de la segunda salida: sube desde la galería de la planta 1, junto a una
+        columna que ya esté en `cavadas`, hasta la superficie lo más lejos posible de la entrada."""
         a, b = self.tramo[1]
         largo = 2 * PISOS[1]
         mejor = None
         for x in range(a, b + 1):
+            if not any((x + dx, PISOS[1]) in cavadas for dx in (-1, 0, 1)):
+                continue
             for sentido in (1, -1):
                 x2 = x + sentido * largo
                 lo, hi = min(x, x2), max(x, x2)
@@ -396,9 +450,52 @@ class Plan:
                 lejos = abs(x2 - self.entrada)
                 if lejos > 24 and (mejor is None or lejos > mejor[0]):
                     mejor = (lejos, x, x2)
-        if mejor:
-            _, x, x2 = mejor
-            obras.insert(min(3, len(obras)), Obra("salida", "una segunda salida", rampa(x, PISOS[1], x2, 0)))
+        return mejor
+
+    def _montar_obras(self, dias):
+        rng = self.rng
+        obras = []
+        # salas nuevas, al lado de las galerías que ya hay (mejor en las plantas de abajo).
+        # Si no caben: abren una planta más honda con una rampa nueva, o la hacen más estrecha.
+        self.lado = -1
+        self.sin_sitio = []
+        # la clave de cada sala nueva («obra-despensa», «obra-despensa-2»...) no choca con las
+        # del nido ni con otra obra del mismo nombre; el tipo sigue saliendo del nombre
+        claves = {s.clave for s in self.salas_todas}
+        for d in self.salas_obras:
+            ancho = int(d.get("ancho", 22))
+            hueco = self._hueco_obra(ancho)
+            while hueco is None and self.hondo < len(PISOS) - 1 and self._bajar_planta(obras):
+                hueco = self._hueco_obra(ancho)
+            while hueco is None and ancho > 14:
+                ancho -= 4
+                hueco = self._hueco_obra(ancho)
+            if hueco is None:
+                self.sin_sitio.append(d["nombre"])
+                continue
+            n, x0, gal = hueco
+            clave, k = "obra-" + d["clave"], 1
+            while clave in claves:
+                k += 1
+                clave = "obra-%s-%d" % (d["clave"], k)
+            claves.add(clave)
+            sala = Sala(clave, d["nombre"], x0, PISOS[n], ancho)
+            sala.tipo, sala.funcion, sala.nivel = d.get("tipo", d["clave"]), d.get("funcion", d["clave"]), n
+            self._ocupar(n, x0, x0 + ancho - 1)
+            obras.append(Obra("galeria", "la galería de la planta %d" % n, gal))
+            obras.append(Obra("sala", d["nombre"], sala_celdas(sala), sala))
+            self.salas_todas.append(sala)
+        # segunda salida: tras las primeras obras del año, desde un tramo de la galería de la
+        # planta 1 que ya esté cavado cuando empiece (si no hay ninguno, más adelante)
+        cavadas = set(self.obras[0].celdas)
+        for i in range(len(obras) + 1):
+            mejor = self._salida(cavadas) if i >= min(3, len(obras)) else None
+            if mejor:
+                _, x, x2 = mejor
+                obras.insert(i, Obra("salida", "una segunda salida", rampa(x, PISOS[1], x2, 0)))
+                break
+            if i < len(obras):
+                cavadas.update(obras[i].celdas)
         # exploración: alargan las galerías hacia los bordes
         for n in range(1, self.hondo + 1):
             a, b = self.tramo[n]
@@ -544,9 +641,26 @@ class Plan:
                 return False
         return True
 
-    def camino(self, origen, destino):
-        """BFS por el suelo de túneles, rampas y salas (y por la superficie, fila -1).
+    def _pasos(self, x, y, vistos):
+        """Los sitios del suelo a los que se pasa desde (x, y) y que no están en `vistos`.
         Trepan por las paredes: pueden subir o bajar hasta 8 filas si el hueco lo permite."""
+        for dx in (1, -1):
+            nx = x + dx
+            for dy in (0, -1, 1, -2, 2, -3, 3, -4, 4, -5, 5, -6, 6, -7, 7, -8, 8):
+                ny = y + dy
+                n = (nx, ny)
+                if n in vistos or not self.suelo_en(nx, ny):
+                    continue
+                if ny == -1 and y > 0:
+                    continue  # a la superficie sólo desde lo alto de una rampa
+                if y == -1 and ny > 0:
+                    continue
+                if abs(dy) > 1 and not (self._abierto(nx, y, ny) or self._abierto(x, y, ny)):
+                    continue
+                yield n
+
+    def camino(self, origen, destino):
+        """BFS por el suelo de túneles, rampas y salas (y por la superficie, fila -1)."""
         if origen == destino:
             return []
         if not self.suelo_en(*destino):
@@ -554,28 +668,26 @@ class Plan:
         previo = {origen: None}
         cola = deque([origen])
         while cola:
-            x, y = cola.popleft()
-            for dx in (1, -1):
-                nx = x + dx
-                for dy in (0, -1, 1, -2, 2, -3, 3, -4, 4, -5, 5, -6, 6, -7, 7, -8, 8):
-                    ny = y + dy
-                    n = (nx, ny)
-                    if n in previo or not self.suelo_en(nx, ny):
-                        continue
-                    if ny == -1 and y > 0:
-                        continue  # a la superficie sólo desde lo alto de una rampa
-                    if y == -1 and ny > 0:
-                        continue
-                    if abs(dy) > 1 and not (self._abierto(nx, y, ny) or self._abierto(x, y, ny)):
-                        continue
-                    previo[n] = (x, y)
-                    if n == destino:
-                        ruta = []
-                        p = n
-                        while p != origen:
-                            ruta.append(p)
-                            p = previo[p]
-                        ruta.reverse()
-                        return ruta
-                    cola.append(n)
+            actual = cola.popleft()
+            for n in self._pasos(*actual, previo):
+                previo[n] = actual
+                if n == destino:
+                    ruta = []
+                    p = n
+                    while p != origen:
+                        ruta.append(p)
+                        p = previo[p]
+                    ruta.reverse()
+                    return ruta
+                cola.append(n)
         return None
+
+    def alcanzables(self, origen):
+        """Todos los sitios del suelo a los que se llega andando desde origen."""
+        vistos = {origen}
+        cola = deque([origen])
+        while cola:
+            for n in self._pasos(*cola.popleft(), vistos):
+                vistos.add(n)
+                cola.append(n)
+        return vistos
