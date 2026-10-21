@@ -2,7 +2,8 @@
 #  SALA DE DESARROLLO  ·  sala de trabajo
 #  Cada [[miembro]] es una hormiga. Para mover a alguien de sala, corta su
 #  bloque y pégalo en el fichero de la otra sala. Para quitar a alguien,
-#  bórralo de aquí y añádelo a idos.toml (así tendrá su tumba).
+#  añádelo a idos.toml (así tendrá su tumba) y bórralo de aquí; si en
+#  idos.toml le pones una fecha futura, déjalo aquí hasta ese día.
 #  Los cambios de gente se aplican solos a los pocos segundos de guardar;
 #  si cambias planta, x, ancho o tipo, reinicia el hormiguero.
 #

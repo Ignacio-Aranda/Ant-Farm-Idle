@@ -20,3 +20,6 @@ cumple = "05-12"
 [[miembro]]
 nombre = "Hugo"
 cumple = "27-04"
+
+[[miembro]]
+nombre = "Irene"    # se va el 30 de septiembre: está en idos.toml con esa fecha

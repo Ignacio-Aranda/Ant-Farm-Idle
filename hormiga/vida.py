@@ -199,8 +199,9 @@ class Vida:
 
     def _llamar_defensa(self, enemigo, n):
         m = self.m
+        # las que llevan algo (o ayudan a llevarlo) primero lo guardan
         despiertas = [h for h in m.hormigas.values() if not h.durmiendo and h.tarea is None
-                      and h.y >= -1 and not h.escoltando]
+                      and h.y >= -1 and not h.escoltando and h.carga_cosa is None]
         self.rng.shuffle(despiertas)
         for h in despiertas[:n]:
             h.defender(m, enemigo)
@@ -261,7 +262,11 @@ class Vida:
                         nombres = [h.nombre for h in presentes]
                         c.tipo = "comida"
                         c.arte = [MUERTO.get(c.clave, "x")]
-                        c.asignadas = list(dict.fromkeys(presentes + c.asignadas))[:c.peso]
+                        # se la llevan las que caben; las demás quedan libres
+                        quedan = list(dict.fromkeys(presentes + c.asignadas))
+                        for h in quedan[c.peso:]:
+                            h.liberar(m)
+                        c.asignadas = quedan[:c.peso]
                         m.noticia("%s han cazado %s." % (_lista(nombres), c.nombre) if len(nombres) > 1
                                   else "%s ha cazado %s." % (nombres[0], c.nombre))
                 else:
@@ -282,7 +287,7 @@ class Vida:
                     lider.llevar(m, c)
                     for k, a in enumerate(ayudantes):
                         a.escoltar(lider, k + 1)
-                    for h in c.asignadas:
+                    for h in list(c.asignadas):   # liberar() la quita de la lista
                         if h not in presentes[:c.peso]:
                             h.liberar(m)
                     c.asignadas = []
@@ -290,7 +295,7 @@ class Vida:
                     c.estado = "fin"
         for c in self.cosas:
             if c.estado == "fin":
-                for h in c.asignadas:
+                for h in list(c.asignadas):
                     h.liberar(m)
                 c.asignadas = []
         self.cosas = [c for c in self.cosas if c.estado != "fin"]
@@ -349,7 +354,8 @@ class Vida:
                     if e.clave == "arana":
                         e.estado = "huye"
                         e.dir = 1 if e.x > W / 2 else -1
-                        m.noticia("%s han echado a la araña." % _lista(nombres))
+                        verbo = "han" if len(set(nombres)) > 1 else "ha"
+                        m.noticia("%s %s echado a la araña." % (_lista(nombres), verbo))
                     else:
                         if rng.random() < 0.5:
                             e.estado = "huye"
@@ -363,7 +369,7 @@ class Vida:
                         if not any(o.estado == "libre" for o in self.enemigos
                                    if o.clave == "roja" and o is not e):
                             m.noticia("¡Las defensoras han echado a las hormigas rojas!")
-                    for h in e.asignadas:
+                    for h in list(e.asignadas):
                         h.liberar(m)
                     e.asignadas = []
             else:
@@ -381,7 +387,7 @@ class Vida:
                 e.dir = 1 if e.x > W / 2 else -1
         for e in self.enemigos:
             if e.estado == "fin":
-                for h in e.asignadas:
+                for h in list(e.asignadas):
                     h.liberar(m)
         self.enemigos = [e for e in self.enemigos if e.estado != "fin"]
 

@@ -35,6 +35,7 @@ class Mundo:
         # avisos de los ficheros (se rehacen en cada recarga) y del trazado y el dibujo (se quedan)
         self.avisos_carga = avisos if avisos is not None else []
         self.avisos = []
+        self.avisos_gente = []   # los de idos.toml que dependen del día (se rehacen solos)
         self._avisado = set()
         self.raiz = cfg.get("raiz", ".")
         self.clima = False   # se crea al primer uso (y sólo si el reloj va en hora)
@@ -97,12 +98,13 @@ class Mundo:
                 self.avisos_carga.append("%s: fecha de baja mal escrita" % q["nombre"])
                 q["fecha"] = None
             self.idos_cfg.append(q)
-        self.hormigas = {}
+        # las hormigas no se vuelven a crear: actualizar_contexto quita a quien ya no está,
+        # añade a quien llega y cambia de sala (o de color) a las demás sin moverlas
         self._diario_dia = None
 
     def todos_los_avisos(self):
-        """Los avisos de los ficheros y los del trazado y el dibujo, sin repetir."""
-        return list(dict.fromkeys(self.avisos_carga + self.avisos))
+        """Los avisos de los ficheros, los de idos.toml, y los del trazado y el dibujo, sin repetir."""
+        return list(dict.fromkeys(self.avisos_carga + self.avisos + self.avisos_gente))
 
     # -------------------------------------------------------------- montaje
 
@@ -206,6 +208,12 @@ class Mundo:
         nombres_idos = {n.lower() for n in self.idos}
         presentes = [p for p in self.personas
                      if (not p["alta"] or p["alta"] <= hoy) and p["nombre"].lower() not in nombres_idos]
+        # quien se va más adelante sigue en su sala hasta ese día: si ya no está en ninguna, se avisa
+        en_salas = {p["nombre"].lower() for p in self.personas}
+        self.avisos_gente = ["idos.toml: %s se va el %s, pero ya no está en ninguna sala; "
+                             "déjalo en la suya hasta ese día" % (d["nombre"], d["fecha"].isoformat())
+                             for d in self.idos_cfg
+                             if d["fecha"] and d["fecha"] > hoy and d["nombre"].lower() not in en_salas]
         self.cumples = [p["nombre"] for p in presentes if F.es_cumple(p, hoy)]
         # la tarta va junto a la entrada, en el lado donde quepa (con los regalos ocupa ~20 columnas)
         e = self.plan.entrada
@@ -216,8 +224,8 @@ class Mundo:
             vivos.add(p["nombre"])
             presentes.append(p)
         for n in list(self.hormigas):
-            if n not in vivos:
-                del self.hormigas[n]
+            if n not in vivos:   # antes suelta lo que llevaba y lo que estaba haciendo
+                self.hormigas.pop(n).liberar(self)
         usados = [p["color"] for p in presentes if p.get("color")]
         for i, p in enumerate(presentes):
             if not p.get("color") and self.estado is not None and not p.get("esqueleto"):
@@ -248,7 +256,8 @@ class Mundo:
                          if o.escoltando and o.escoltando[0] is h]
             quienes = [h.nombre] + ayudantes
             texto = (", ".join(quienes[:-1]) + " y " + quienes[-1]) if len(quienes) > 1 else quienes[0]
-            self.noticia("%s han guardado %s en %s." % (texto, cosa.nombre, destino))
+            verbo = "han" if len(quienes) > 1 else "ha"
+            self.noticia("%s %s guardado %s en %s." % (texto, verbo, cosa.nombre, destino))
         self.guardado = getattr(self, "guardado", 0) + cosa.peso
 
     def _citas(self):
@@ -392,15 +401,23 @@ class Mundo:
         for fi in self.fiestas:
             if fi.empieza(f):
                 ev.append((k, k, fi.mensaje))
+        # los que ese día ya se han ido (sin fecha: desde siempre)
+        idos = {d["nombre"].lower() for d in self.idos_cfg if not d["fecha"] or d["fecha"] <= f}
         for p in self.personas:
-            if F.es_cumple(p, f):
+            # la tarta, sólo si ese día está en el hormiguero (ya ha llegado y no se ha ido)
+            if F.es_cumple(p, f) and (not p["alta"] or p["alta"] <= f) and p["nombre"].lower() not in idos:
                 ev.append((k, k + 0.1, "¡Cumpleaños de %s! Hay tarta arriba." % p["nombre"]))
             if p["alta"] == f and k > 0:
                 ev.append((k, k + 0.2, "Llega %s al hormiguero. ¡Bienvenida/o!" % p["nombre"]))
         for d in self.idos_cfg:
             if d["fecha"] == f:
-                ev.append((k, k + 0.2, "%s se va del hormiguero. Gone, but not forgotten." % d["nombre"]))
-        if (f.month, f.day) == (10, 26) and self.idos_cfg and self.cfg.get("halloween", {}).get("esqueletos"):
+                # la despedida: su epitafio de idos.toml, si lo tiene
+                adios = str(d.get("epitafio") or "").strip() or "Gone, but not forgotten"
+                j = next((j for j, c in enumerate(adios) if c.isalpha()), 0)   # tras «¡», «¿»...
+                adios = adios[:j] + adios[j:j + 1].upper() + adios[j + 1:]
+                adios += "" if adios[-1] in ".!?…»\"" else "."
+                ev.append((k, k + 0.2, "%s se va del hormiguero. %s" % (d["nombre"], adios)))
+        if (f.month, f.day) == (10, 26) and idos and self.cfg.get("halloween", {}).get("esqueletos"):
             ev.append((k, k + 0.2, "¡Los que se fueron salen del cementerio! Pasearán por aquí hasta Halloween."))
         tdia = self._tiempo_de(f)
         if tdia is None:
@@ -455,9 +472,14 @@ class Mundo:
             return
         self._diario_dia = (hoy, int(self.dia * 24))
         ev = []
-        fundadores = [p["nombre"] for p in self.personas if not p["alta"] or p["alta"] <= self.fundacion]
-        ev.append((0, 0, "Se funda el hormiguero%s: %s." % (self.de_quien, ", ".join(fundadores))))
+        # los fundadores: quien está el primer día (ya ha llegado y no se ha ido)
+        idos = {d["nombre"].lower() for d in self.idos_cfg if not d["fecha"] or d["fecha"] <= self.fundacion}
+        fundadores = [p["nombre"] for p in self.personas
+                      if (not p["alta"] or p["alta"] <= self.fundacion) and p["nombre"].lower() not in idos]
+        quienes = (": " + ", ".join(fundadores)) if fundadores else ""
+        ev.append((0, 0, "Se funda el hormiguero%s%s." % (self.de_quien, quienes)))
         ultima = None
+        inaugurada = {}   # el día en que se termina cada sala de las obras
         for i, o in enumerate(self.plan.obras):
             if o.fin > self.dia_obras or o.ini < 0:
                 continue
@@ -469,6 +491,7 @@ class Mundo:
             ultima = d
             orden = d + 0.5 + o.fin / 10000   # dentro del día, en el orden en que se terminaron
             if o.tipo == "sala":
+                inaugurada[o.sala.clave] = d
                 ev.append((d, orden, "Inauguran: %s." % o.sala.nombre))
             elif o.tipo == "salida":
                 ev.append((d, orden, "Abren una segunda salida a la superficie."))
@@ -482,6 +505,10 @@ class Mundo:
             ev.append((ultima, ultima + 0.9, "Ya no cabe nada más en el hormiguero: se quedan sin hacer %s."
                        % ", ".join(self.plan.sin_sitio)))
         for s in self.plan.salas_todas:
+            # los muebles nuevos de una sala de las obras, no antes de que se inaugure
+            desde = 0 if s.principal else inaugurada.get(s.clave)
+            if desde is None:
+                continue
             for mu in self.muebles_de(s):
                 d = mu.get("aparece", mu.get("dia", 0))
                 if mu.get("fecha"):
@@ -493,12 +520,13 @@ class Mundo:
                     d = int(d)
                 except (TypeError, ValueError):
                     continue
+                d = max(d, desde) if d > 0 else 0
                 if 0 < d <= self.dia:
-                    ev.append((d, d + 0.5, "%s: %s nuevo." % (s.nombre, mu.get("nombre", mu.get("pieza", "algo")))))
+                    ev.append((d, d + 0.6, "%s: %s nuevo." % (s.nombre, mu.get("nombre", mu.get("pieza", "algo")))))
         dias = int(self.dia)
         # los días ya calculados se guardan (si no cambia la gente ni el calendario)
         firma = (id(self.fiestas), tuple((p["nombre"], str(p.get("cumple")), p["alta"]) for p in self.personas),
-                 tuple((d["nombre"], d["fecha"]) for d in self.idos_cfg))
+                 tuple((d["nombre"], d["fecha"], str(d.get("epitafio"))) for d in self.idos_cfg))
         if getattr(self, "_dias_firma", None) != firma or dias < len(getattr(self, "_dias_ev", [])):
             self._dias_firma = firma
             self._dias_ev = []

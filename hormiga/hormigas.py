@@ -100,11 +100,10 @@ class Hormiga:
         self.tarea = None
         self.carga_cosa = cosa
         destino = m.almacen_comida()
-        if destino is None:
-            return
+        # sin despensa ni ninguna sala, lo dejan en la entrada del nido
+        punto = m.punto_libre(destino, self.rng, self) if destino else (m.plan.entrada, -1)
         arte = cosa.arte[0]
-        self.ir(m, m.punto_libre(destino, self.rng, self), "guardar",
-                carga=arte if len(arte) <= 6 else arte[:6])
+        self.ir(m, punto, "guardar", carga=arte if len(arte) <= 6 else arte[:6])
         self.carga_color = cosa.color
 
     def libre(self):
@@ -144,6 +143,8 @@ class Hormiga:
     def decidir(self, m):
         rng = self.rng
         self.durmiendo = False
+        if self.carga_cosa is not None:   # lo que lleva a cuestas, primero a guardarlo
+            return self.llevar(m, self.carga_cosa)
         if self.cita:
             sala, hasta = self.cita
             if m.ahora < hasta:
@@ -207,6 +208,9 @@ class Hormiga:
             opciones.append(("forrajear", afuera))
         if m.cumples and self.nombre not in m.cumples:
             opciones.append(("felicitar", 2.0))
+        if not opciones:   # sin ninguna sala ni obra, y sin poder salir: esperan junto a la entrada
+            x = max(0, min(m.plan_ancho - 1, m.plan.entrada + rng.randint(-6, 6)))
+            return self.ir(m, (x, -1), "entrada")
         destino = rng.choices([o for o, _ in opciones], [w for _, w in opciones])[0]
 
         if destino == "casa":

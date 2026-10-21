@@ -1,10 +1,12 @@
 # =====================================================================
 #  LOS QUE SE FUERON · cada [[ido]] tiene su tumba en el cementerio de arriba
 #  nombre   : lo que pone en la lápida
-#  fecha    : opcional, "AAAA-MM-DD". Si es futura, la hormiga sigue hasta ese
-#             día y entonces se va (sale en el diario). Sin fecha: ya se fue.
-#  epitafio : opcional
-#  Si alguien se va: bórralo de su sala y añádelo aquí.
+#  fecha    : opcional, "AAAA-MM-DD": el día en que se va (sale en el diario).
+#             Sin fecha: ya se fue.
+#  epitafio : opcional, su despedida en el diario el día en que se va
+#  Si alguien se va: añádelo aquí y bórralo de su sala. Con una fecha futura,
+#  déjalo en su sala hasta ese día (su hormiga sigue hasta entonces); si ya
+#  no está en ninguna, sale un aviso.
 # =====================================================================
 
 [[ido]]

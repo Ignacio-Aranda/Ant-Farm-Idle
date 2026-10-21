@@ -441,10 +441,16 @@ class RelojDemo:
 
 def fechas_importantes(inicio, fiestas, salas, idos, dias=400):
     out = {}
+    # cuándo se va cada uno (sin fecha, o mal escrita: ya se fue)
+    bajas = [(str(i["nombre"]).lower(), _dia(i.get("fecha")) or inicio) for i in idos]
     for k in range(dias):
         d = inicio + datetime.timedelta(days=k)
         cosas = [f.nombre for f in fiestas if f.empieza(d)]
-        cumples = [m["nombre"] for s in salas for m in s.get("miembros", []) if F.es_cumple(m, d)]
+        # cumpleaños sólo de quien ese día está en el hormiguero (ya ha llegado y no se ha ido)
+        idos_ya = {n for n, f in bajas if f <= d}
+        cumples = [m["nombre"] for s in salas for m in s.get("miembros", [])
+                   if F.es_cumple(m, d) and (_dia(m.get("alta")) or d) <= d
+                   and m["nombre"].lower() not in idos_ya]
         if cumples:
             cosas.append("Cumpleaños de " + ", ".join(cumples[:6]) + ("..." if len(cumples) > 6 else ""))
         for i in idos:
