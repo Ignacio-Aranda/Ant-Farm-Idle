@@ -28,6 +28,7 @@ python3 hormiguero_pixel.py --ventana
 | `--ventana` | En una ventana (si no, a pantalla completa). |
 | `--demo` | Un año entero a toda velocidad, parando en las fechas importantes. |
 | `--fecha 2026-12-24 --hora 21:00` | Ver un día y una hora concretos. |
+| `--tiempo nieve` | Forzar el tiempo: `despejado`, `nublado`, `lluvia`, `tormenta`, `nieve` o `calima`. |
 | `--captura imagen.png` | Sin pantalla: simula un rato y guarda una imagen. |
 | `--medir` | Sin pantalla: mide lo que tarda cada fotograma. |
 
@@ -82,12 +83,22 @@ Hay escritorios, mesas, nevera, cafetera, fuente de agua, estanterías, vitrina 
 hallazgos de la colonia, pizarra, un reloj que marca la hora de verdad, sofá, plantas
 que crecen con los días... La lista completa está en [tipos/LEEME.md](tipos/LEEME.md).
 
+![Todos los muebles](docs/galeria-muebles.png)
+![Los tipos de sala que vienen hechos](docs/galeria-tipos.png)
+
+Las salas que excavan durante el año (despensa, museo, vivero de hongos, almacén y
+biblioteca, se pueden cambiar en `[nido]`) se ponen en los huecos libres. Si ya no
+caben, abren una planta más honda con una rampa nueva o las hacen más estrechas; si
+el hormiguero está lleno del todo, se quedan sin hacer y lo cuenta el diario.
+
 ### Paisaje
 
 En `config.toml` se elige lo que hay arriba y dónde (en % del ancho de la pantalla):
 árboles, chumberas, farolas, bancos y casas en la superficie; catedral, ciudad, faro,
 molino, torre o castillo al fondo. De noche se encienden las ventanas y las farolas,
 el faro barre el cielo y el molino gira.
+
+![Todas las piezas del paisaje, de día y de noche](docs/galeria-paisaje.png)
 
 ```toml
 [[paisaje.suelo]]
@@ -112,6 +123,15 @@ export OPENWEATHER_API_KEY=tu_clave
 
 o guárdala en `local/openweather_clave.txt` (la carpeta `local/` no se sube a git).
 Sin clave, o si se va internet, el tiempo sale de un modelo estadístico.
+
+Cuando nieva, la nieve se queda encima de los árboles, los tejados, las lápidas y el
+suelo, y en las cumbres de los montes, hasta un día después.
+
+### Halloween
+
+Con `esqueletos = true` en `[halloween]`, del 26 al 31 de octubre los que se fueron
+(`idos.toml`) salen del cementerio y se pasean por el hormiguero como hormigas
+esqueleto, también de noche.
 
 ## En una Raspberry Pi
 
@@ -142,6 +162,11 @@ Los ficheros de `salas/`, `idos.toml` y `calendario.toml` de este repositorio so
 ejemplo, con gente inventada. Si quieres tener los tuyos fuera del repositorio (para
 no subir nombres ni cumpleaños), guárdalos donde quieras y arranca con `--salas`,
 `--tipos`, `--idos`, `--calendario` y `-c` apuntando a ellos.
+
+## Galerías
+
+Las imágenes de muebles, tipos de sala y paisaje de `docs/` se regeneran con
+`python3 herramientas/galeria.py` (por ejemplo, después de añadir una pieza nueva).
 
 ## Licencia
 

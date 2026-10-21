@@ -35,6 +35,11 @@ Cada pieza ya sabe si va en el suelo o en la pared; si no pones `sitio`, usa el 
 
 ## Piezas
 
+![Todos los muebles](../docs/galeria-muebles.png)
+![Los tipos que vienen hechos](../docs/galeria-tipos.png)
+
+Las imágenes se generan con `python3 herramientas/galeria.py`.
+
 | Pieza | Dónde | |
 |---|---|---|
 | `escritorio` | suelo | Mesa con ordenador y silla (la pantalla parpadea). |
