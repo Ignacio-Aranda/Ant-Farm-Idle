@@ -53,6 +53,7 @@ def cargar(args, avisos):
             avisos.append("config: %s" % e)
     tipos = cargar_tipos(args.tipos, avisos)
     cfg["tipos"] = tipos
+    cfg["raiz"] = RAIZ
     salas = []
     if os.path.isdir(args.salas):
         for nombre in sorted(os.listdir(args.salas)):

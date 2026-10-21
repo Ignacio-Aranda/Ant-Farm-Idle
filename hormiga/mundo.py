@@ -4,6 +4,7 @@ import datetime
 
 from motor.colores import color
 
+from . import clima_real as CR
 from . import fiestas as F
 from . import tiempo as T
 from .hormigas import Hormiga
@@ -31,6 +32,8 @@ class Mundo:
         self.reloj = reloj
         self.avisos = avisos if avisos is not None else []
         self._avisado = set()
+        self.raiz = cfg.get("raiz", ".")
+        self.clima = False   # se crea al primer uso (y sólo si el reloj va en hora)
         self.semilla = cfg["general"]["semilla"]
         nombre = str(cfg["general"].get("nombre", "")).strip()
         self.de_quien = " de %s" % nombre if nombre else ""
@@ -110,24 +113,40 @@ class Mundo:
 
     # ------------------------------------------------------------ contexto
 
+    def _tiempo_real(self):
+        """El tiempo de OpenWeather, sólo si el reloj va en hora (no en demo ni en otra fecha)."""
+        if abs((self.ahora - datetime.datetime.now()).total_seconds()) > 300:
+            return None
+        if self.clima is False:
+            self.clima = CR.desde_config(self.cfg, self.raiz)
+        return self.clima.actual() if self.clima else None
+
     def actualizar_contexto(self, forzar=False):
         self.ahora = self.reloj()
         hoy = self.ahora.date()
         inicio = datetime.datetime.combine(self.fundacion, datetime.time())
         self.dia = max(0.0, (self.ahora - inicio).total_seconds() / 86400)
         self.plan.actualizar(self.dia)
-        self.tiempo_hoy = T.tiempo_del_dia(hoy, self.semilla)
-        self.sol_hoy = T.sol(hoy)
+        ciudad = self.cfg.get("ciudad", {})
+        lat, lon = float(ciudad.get("lat", T.MALAGA[0])), float(ciudad.get("lon", T.MALAGA[1]))
+        real = self._tiempo_real()
+        self.tiempo_hoy = real or T.tiempo_del_dia(hoy, self.semilla)
+        self.sol_hoy = (real and real.sol) or T.sol(hoy, lat, lon, ciudad.get("zona_horaria"))
         mins = self.ahora.hour * 60 + self.ahora.minute
         a, p = self.sol_hoy
         self.de_noche = not (a <= mins < p)
         self.lluvia = self.tiempo_hoy.lluvia(mins)
+        self.nieve = self.tiempo_hoy.nieve and self.lluvia > 0
         self.temperatura = self.tiempo_hoy.temperatura(mins)
-        self.estacion = T.estacion(hoy)
+        self.estacion = T.estacion(hoy, sur=lat < 0)
         if forzar or int(self.t) % 30 == 0:
-            self.llovio = T.llovio_hace(self.ahora, 8, self.semilla)
-            self.llovio_semana = any(T.tiempo_del_dia(hoy - datetime.timedelta(d), self.semilla).llueve
-                                     for d in range(4))
+            if real:
+                self.llovio = self.clima.llovio_hace(8)
+                self.llovio_semana = self.clima.llovio_hace(96)
+            else:
+                self.llovio = T.llovio_hace(self.ahora, 8, self.semilla)
+                self.llovio_semana = any(T.tiempo_del_dia(hoy - datetime.timedelta(d), self.semilla).llueve
+                                         for d in range(4))
         act = F.activas(self.fiestas, hoy)
         self.decoraciones = {f.decoracion for f in act}
         self.fiesta_mensaje = act[-1].mensaje if act else None
@@ -312,6 +331,55 @@ class Mundo:
 
     # ------------------------------------------------------------- dibujo
 
+    def _eventos_dia(self, k, seco):
+        """Lo que pasó el día k del hormiguero: fiestas, cumpleaños, llegadas, idas y el tiempo.
+        seco: días seguidos sin llover hasta ayer. Devuelve (eventos, seco)."""
+        ev = []
+        f = self.fundacion + datetime.timedelta(days=k)
+        for fi in self.fiestas:
+            if fi.empieza(f):
+                ev.append((k, k, fi.mensaje))
+        for p in self.personas:
+            if F.es_cumple(p, f):
+                ev.append((k, k + 0.1, "¡Cumpleaños de %s! Hay tarta arriba." % p["nombre"]))
+            if p["alta"] == f and k > 0:
+                ev.append((k, k + 0.2, "Llega %s al hormiguero. ¡Bienvenida/o!" % p["nombre"]))
+        for d in self.idos_cfg:
+            if d["fecha"] == f:
+                ev.append((k, k + 0.2, "%s se va del hormiguero. Gone, but not forgotten." % d["nombre"]))
+        tdia = self._tiempo_de(f)
+        if tdia is None:
+            return ev, seco
+        if tdia.llueve:
+            if seco >= 25:
+                ev.append((k, k + 0.3, "¡Por fin llueve después de %d días!" % seco))
+            if tdia.tormenta:
+                ev.append((k, k + 0.3, "Tormenta. Todas dentro."))
+            seco = 0
+        else:
+            seco += 1
+        if tdia.nieve:
+            ev.append((k, k + 0.3, "¡Nieva! Todo se queda blanco."))
+        if tdia.calima:
+            ev.append((k, k + 0.3, "Calima: el cielo se pone naranja."))
+        if tdia.terral:
+            ev.append((k, k + 0.3, "Terral. Hace un calor que derrite."))
+        return ev, seco
+
+    def _tiempo_de(self, fecha):
+        """Cómo fue el tiempo de un día: lo apuntado de OpenWeather si se usa, si no el de respaldo."""
+        if self.clima:
+            d = self.clima.dia(fecha)
+            if d is None:
+                return None
+            class Dia:
+                terral = False
+            dia = Dia()
+            for k in ("llueve", "tormenta", "nieve", "calima"):
+                setattr(dia, k, bool(d.get(k)))
+            return dia
+        return T.tiempo_del_dia(fecha, self.semilla)
+
     def actualizar_diario(self):
         hoy = self.ahora.date()
         if self._diario_dia == (hoy, int(self.dia * 24)):
@@ -352,42 +420,16 @@ class Mundo:
         # los días ya calculados se guardan (si no cambia la gente ni el calendario)
         firma = (id(self.fiestas), tuple((p["nombre"], str(p.get("cumple")), p["alta"]) for p in self.personas),
                  tuple((d["nombre"], d["fecha"]) for d in self.idos_cfg))
-        if getattr(self, "_dias_firma", None) != firma or dias < len(getattr(self, "_dias_ev", [])) - 1:
+        if getattr(self, "_dias_firma", None) != firma or dias < len(getattr(self, "_dias_ev", [])):
             self._dias_firma = firma
             self._dias_ev = []
             self._dias_seco = 0
-        seco = self._dias_seco
-        for k in range(len(self._dias_ev), dias + 1):
-            antes = len(ev)
-            f = self.fundacion + datetime.timedelta(days=k)
-            for fi in self.fiestas:
-                if fi.empieza(f):
-                    ev.append((k, k, fi.mensaje))
-            for p in self.personas:
-                if F.es_cumple(p, f):
-                    ev.append((k, k + 0.1, "¡Cumpleaños de %s! Hay tarta arriba." % p["nombre"]))
-                if p["alta"] == f and k > 0:
-                    ev.append((k, k + 0.2, "Llega %s al hormiguero. ¡Bienvenida/o!" % p["nombre"]))
-            for d in self.idos_cfg:
-                if d["fecha"] == f:
-                    ev.append((k, k + 0.2, "%s se va del hormiguero. Gone, but not forgotten." % d["nombre"]))
-            tdia = T.tiempo_del_dia(f, self.semilla)
-            if tdia.llueve:
-                if seco >= 25:
-                    ev.append((k, k + 0.3, "¡Por fin llueve después de %d días!" % seco))
-                if tdia.tormenta:
-                    ev.append((k, k + 0.3, "Tormenta. Todas dentro."))
-                seco = 0
-            else:
-                seco += 1
-            if tdia.calima:
-                ev.append((k, k + 0.3, "Calima: el cielo se pone naranja."))
-            if tdia.terral:
-                ev.append((k, k + 0.3, "Terral. Hace un calor que derrite."))
-            self._dias_ev.append(ev[antes:])
-            del ev[antes:]
-        self._dias_seco = seco
+        # los días pasados se calculan una vez; el de hoy, cada vez (el tiempo real puede cambiar)
+        while len(self._dias_ev) < dias:
+            lista, self._dias_seco = self._eventos_dia(len(self._dias_ev), self._dias_seco)
+            self._dias_ev.append(lista)
         for lista in self._dias_ev:
             ev.extend(lista)
+        ev.extend(self._eventos_dia(dias, self._dias_seco)[0])
         ev.sort(key=lambda e: e[1])
         self.diario = [(e[0], e[2]) for e in ev]

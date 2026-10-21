@@ -6,6 +6,23 @@ fundacion = "2026-01-01"   # día 0: el hormiguero crece a partir de esta fecha
 semilla = 2026             # cambia el número para otro trazado de túneles
 fps_pixel = 20             # fotogramas por segundo de la versión gráfica
 
+[ciudad]
+# Para el sol (amanecer y anochecer) y para el tiempo real. Búscalas en un mapa.
+nombre = "Málaga"
+lat = 36.72
+lon = -4.42
+# zona_horaria = "Europe/Madrid"   # sólo si el ordenador está en otra zona horaria
+
+[tiempo]
+# fuente = "openweather": tiempo real de https://openweathermap.org (gratis, hace falta una clave).
+#   La clave NO la pongas aquí si vas a subir el repo: usa la variable de entorno
+#   OPENWEATHER_API_KEY o el fichero local/openweather_clave.txt (no se sube).
+# fuente = "estadistico": sin internet, con un clima de ejemplo (el de Málaga).
+# Si no hay clave o falla internet, se usa el estadístico.
+fuente = "openweather"
+cada_minutos = 10          # cada cuánto se pide el tiempo
+# clave = ""
+
 [horario]
 desayuno = "10:30-11:00"   # a esta hora muchas van al comedor
 comida = "13:30-15:30"     # y a esta, casi todas

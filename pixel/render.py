@@ -1099,6 +1099,8 @@ class Render:
                     pygame.draw.line(dst, (170, 190, 230), (x, y), (x + dx, y + 6))
                 if y > self.G - 10 and self.rng.random() < 0.3:
                     dst.fill((200, 215, 240), (x - 1, self.G - 2, 3, 1))
+            elif ch == "❄":
+                dst.fill((240, 244, 255), (x + int(math.sin(p[1] + p[0]) * 2), y, 2, 2))
             elif ch in ("♥", "<3"):
                 dst.blit(self.S["corazon"], (x, y))
             elif ch == "*" and p[6] < 1.3:  # fuegos artificiales
@@ -1336,7 +1338,7 @@ class Render:
         fecha = "%s, %d de %s de %d" % (dias[a.weekday()], a.day, meses[a.month - 1], a.year)
         dst.blit(self.letras.texto(fecha, (255, 255, 255), 11), (6, 4))
         info = "Día %d del hormiguero · %s · %.0f °C%s" % (int(m.dia), m.estacion, m.temperatura,
-                                                           " · lluvia" if m.lluvia else "")
+                                                           (" · nieve" if m.nieve else " · lluvia") if m.lluvia else "")
         dst.blit(self.letras.texto(info, (225, 230, 240), 9), (6, 18))
         hora = a.strftime("%H:%M")
         if self.cache_reloj[0] != hora:

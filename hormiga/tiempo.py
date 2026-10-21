@@ -1,62 +1,59 @@
-"""Calendario, sol y clima de Málaga. Todo se calcula a partir de la fecha,
-sin internet: el mismo día siempre tiene el mismo tiempo.
+"""Calendario, sol y clima. El sol se calcula con la latitud y la longitud de la ciudad;
+el tiempo, si no hay datos reales de OpenWeather (hormiga/clima_real.py), sale de un
+modelo estadístico: el mismo día siempre tiene el mismo tiempo.
 
 Fuentes:
-- Clima: AEMET, valores normales 1981-2010, Málaga Aeropuerto (6155A).
-- Sol: tabla de salida/puesta del sol en Málaga (día 1 de cada mes).
+- Sol: aproximación de la NOAA (ecuación del tiempo y declinación solar).
+- Clima de respaldo: AEMET, valores normales 1981-2010, Málaga Aeropuerto (6155A).
 """
 
 import datetime
 import math
 import random
 
-# Media de días con lluvia (>= 1 mm) por mes, enero..diciembre (AEMET).
+# Clima de respaldo (Málaga). Media de días con lluvia (>= 1 mm) por mes, enero..diciembre.
 DIAS_LLUVIA = [5.8, 4.8, 4.0, 4.5, 3.1, 0.8, 0.1, 0.5, 2.1, 4.4, 5.6, 6.6]
 # Precipitación media mensual en mm (para la intensidad).
 LLUVIA_MM = [69, 60, 52, 44, 20, 6, 0, 6, 20, 57, 100, 100]
-# Temperatura media mensual en ºC (AEMET).
+# Temperatura media mensual en ºC.
 TEMP_MEDIA = [12.1, 12.9, 14.7, 16.3, 19.3, 23.0, 25.5, 26.0, 23.5, 19.5, 15.7, 13.2]
 # Oscilación aproximada entre la mínima y la máxima del día.
 OSCILACION = [9, 9, 9, 9, 9, 9, 9, 9, 8, 8, 8, 9]
 # Nubosidad típica (0 despejado - 1 cubierto), estimada a partir de los días de lluvia.
 NUBES = [0.40, 0.38, 0.35, 0.35, 0.25, 0.12, 0.05, 0.08, 0.18, 0.32, 0.40, 0.45]
 
-# Salida y puesta del sol el día 1 de cada mes, en hora OFICIAL de Málaga.
-_SOL_OFICIAL = [(8, 32, 18, 12), (8, 22, 18, 42), (7, 52, 19, 12), (8, 7, 20, 40),
-                (7, 26, 21, 6), (7, 2, 21, 32), (7, 3, 21, 42), (7, 23, 21, 27),
-                (7, 49, 20, 50), (8, 13, 20, 5), (7, 41, 18, 24), (8, 12, 18, 3)]
+MALAGA = (36.72, -4.42)
 
 
-def _ultimo_domingo(anio, mes):
-    d = datetime.date(anio, mes + 1, 1) - datetime.timedelta(days=1) if mes < 12 \
-        else datetime.date(anio, 12, 31)
-    return d - datetime.timedelta(days=(d.weekday() + 1) % 7)
+def desfase_horario(fecha, zona=None):
+    """Minutos de diferencia con UTC ese día (con horario de verano), en la zona de la
+    ciudad si se da (p. ej. "Europe/Madrid") o en la del ordenador si no."""
+    mediodia = datetime.datetime(fecha.year, fecha.month, fecha.day, 12)
+    if zona:
+        try:
+            from zoneinfo import ZoneInfo
+            return mediodia.replace(tzinfo=ZoneInfo(zona)).utcoffset().total_seconds() / 60
+        except Exception:
+            pass
+    return mediodia.astimezone().utcoffset().total_seconds() / 60
 
 
-def horario_verano(fecha):
-    """Hora de verano en España: del último domingo de marzo al último de octubre."""
-    return _ultimo_domingo(fecha.year, 3) <= fecha < _ultimo_domingo(fecha.year, 10)
-
-
-def _sol_estandar(mes):
-    """Tabla en hora de invierno (sin el +1 de verano) para poder interpolar."""
-    h1, m1, h2, m2 = _SOL_OFICIAL[mes - 1]
-    ajuste = 60 if 4 <= mes <= 10 else 0  # del 1 de abril al 1 de octubre ya es verano
-    return h1 * 60 + m1 - ajuste, h2 * 60 + m2 - ajuste
-
-
-def sol(fecha):
-    """(amanecer, anochecer) en minutos desde medianoche, hora oficial."""
-    ini = datetime.date(fecha.year, fecha.month, 1)
-    sig = datetime.date(fecha.year + (fecha.month == 12), fecha.month % 12 + 1, 1)
-    t = (fecha - ini).days / (sig - ini).days
-    a1, p1 = _sol_estandar(fecha.month)
-    a2, p2 = _sol_estandar(sig.month)
-    a = a1 + (a2 - a1) * t
-    p = p1 + (p2 - p1) * t
-    if horario_verano(fecha):
-        a, p = a + 60, p + 60
-    return a, p
+def sol(fecha, lat=MALAGA[0], lon=MALAGA[1], zona=None):
+    """(amanecer, anochecer) en minutos desde medianoche, en hora local."""
+    g = 2 * math.pi / 365 * (fecha.timetuple().tm_yday - 1)
+    ecuacion = 229.18 * (0.000075 + 0.001868 * math.cos(g) - 0.032077 * math.sin(g)
+                         - 0.014615 * math.cos(2 * g) - 0.040849 * math.sin(2 * g))
+    decl = (0.006918 - 0.399912 * math.cos(g) + 0.070257 * math.sin(g) - 0.006758 * math.cos(2 * g)
+            + 0.000907 * math.sin(2 * g) - 0.002697 * math.cos(3 * g) + 0.00148 * math.sin(3 * g))
+    la = math.radians(lat)
+    cos_h = math.cos(math.radians(90.833)) / (math.cos(la) * math.cos(decl)) - math.tan(la) * math.tan(decl)
+    if cos_h <= -1:
+        return 0, 24 * 60          # sol de medianoche
+    if cos_h >= 1:
+        return 12 * 60, 12 * 60    # noche polar
+    h = math.degrees(math.acos(cos_h))
+    desfase = desfase_horario(fecha, zona)
+    return (720 - 4 * (lon + h) - ecuacion + desfase, 720 - 4 * (lon - h) - ecuacion + desfase)
 
 
 def pascua(anio):
@@ -78,20 +75,24 @@ def pascua(anio):
 ESTACIONES = ["invierno", "primavera", "verano", "otoño"]
 
 
-def estacion(fecha):
-    """Estación astronómica (fechas aproximadas)."""
+def estacion(fecha, sur=False):
+    """Estación astronómica (fechas aproximadas). En el hemisferio sur, al revés."""
     md = (fecha.month, fecha.day)
     if md >= (12, 21) or md < (3, 20):
-        return "invierno"
-    if md < (6, 21):
-        return "primavera"
-    if md < (9, 23):
-        return "verano"
-    return "otoño"
+        e = 0
+    elif md < (6, 21):
+        e = 1
+    elif md < (9, 23):
+        e = 2
+    else:
+        e = 3
+    return ESTACIONES[(e + 2) % 4 if sur else e]
 
 
 class TiempoDelDia:
-    """El tiempo de un día concreto en Málaga (determinista)."""
+    """El tiempo de un día concreto según el clima de respaldo (determinista)."""
+
+    nieve = False
 
     def __init__(self, fecha, semilla=0):
         self.fecha = fecha

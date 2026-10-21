@@ -341,7 +341,11 @@ class Superficie:
 
         # lluvia
         lluvia = m.lluvia
-        if lluvia > 0:
+        if lluvia > 0 and m.nieve:
+            for _ in range(int(lluvia * W / 4 * dt * 3) + (rng.random() < lluvia * dt * 8)):
+                self.particulas.append([rng.uniform(-5, W + 5), rng.uniform(-1, 2), rng.uniform(-1.5, 1.5),
+                                        rng.uniform(2.5, 4.5), "❄", color("W"), 20.0])
+        elif lluvia > 0:
             n = int(lluvia * W / 4 * dt * 12)
             viento = -6 if tiempo.tormenta else -2
             for _ in range(n):
