@@ -58,7 +58,7 @@ class Mundo:
         for o in obras:
             o["funcion"] = self.tipos.get(o.get("tipo", o["clave"]), {}).get("funcion", "otra")
         self.plan = Plan(self.semilla, self.fundacion, self.salas_cfg, obras=obras,
-                         entrada=int(nido.get("entrada", 20)), dias_obras=float(nido.get("dias", 365)))
+                         entrada=int(nido.get("entrada", 20)))
         self.avisos.extend(self.plan.avisos)
         self.construir()
 
@@ -414,10 +414,6 @@ class Mundo:
         ev = []
         fundadores = [p["nombre"] for p in self.personas if not p["alta"] or p["alta"] <= self.fundacion]
         ev.append((0, 0, "Se funda el hormiguero%s: %s." % (self.de_quien, ", ".join(fundadores))))
-        n = self.plan.salas_del_año
-        if n:
-            ev.append((0, 0.01, "Plan de obras: %d sala%s nueva%s este año, una cada %d días."
-                       % (n, "s" if n > 1 else "", "s" if n > 1 else "", round(self.plan.intervalo))))
         for o in self.plan.obras:
             if o.fin > self.dia or o.ini < 0:
                 continue

@@ -131,7 +131,7 @@ def sala_celdas(sala):
 
 
 class Plan:
-    def __init__(self, semilla, fundacion, principales, dias_obras=365, obras=None, entrada=ENTRADA):
+    def __init__(self, semilla, fundacion, principales, dias_obras=330, obras=None, entrada=ENTRADA):
         """principales: lista de dicts (clave, nombre, color, planta, ancho, x, tipo, funcion).
         obras: las salas que se excavan durante el año (por defecto OBRAS)."""
         self.semilla = semilla
@@ -357,8 +357,6 @@ class Plan:
         # Si no caben: abren una planta más honda con una rampa nueva, o la hacen más estrecha.
         self.lado = -1
         self.sin_sitio = []
-        grupos = []    # cada sala nueva con la rampa y la galería que hacen falta para llegar a ella
-        hecho = 0
         for d in self.salas_obras:
             ancho = int(d.get("ancho", 22))
             hueco = self._hueco_obra(ancho)
@@ -377,11 +375,6 @@ class Plan:
             obras.append(Obra("galeria", "la galería de la planta %d" % n, gal))
             obras.append(Obra("sala", d["nombre"], sala_celdas(sala), sala))
             self.salas_todas.append(sala)
-            grupos.append(obras[hecho:])
-            hecho = len(obras)
-        # lo que no es una sala: la segunda salida, las galerías de exploración y alguna rampa
-        # que se abrió para una sala que al final no cupo
-        extras = obras[hecho:]
         # segunda salida: desde la galería de la planta 1 hacia arriba, lejos de la entrada
         a, b = self.tramo[1]
         largo = 2 * PISOS[1]
@@ -401,62 +394,44 @@ class Plan:
                     mejor = (lejos, x, x2)
         if mejor:
             _, x, x2 = mejor
-            extras.append(Obra("salida", "una segunda salida", rampa(x, PISOS[1], x2, 0)))
+            obras.insert(min(3, len(obras)), Obra("salida", "una segunda salida", rampa(x, PISOS[1], x2, 0)))
         # exploración: alargan las galerías hacia los bordes
         for n in range(1, self.hondo + 1):
             a, b = self.tramo[n]
             if a - 14 >= BORDE and self._libre(n, a - 14, a - 1, 0):
-                extras.append(Obra("galeria", "una galería hacia el oeste", galeria(a, a - 14, PISOS[n])))
+                obras.append(Obra("galeria", "una galería hacia el oeste", galeria(a, a - 14, PISOS[n])))
             elif b + 14 <= ANCHO - 1 - BORDE and self._libre(n, b + 1, b + 14, 0):
-                extras.append(Obra("galeria", "una galería hacia el este", galeria(b, b + 14, PISOS[n])))
+                obras.append(Obra("galeria", "una galería hacia el este", galeria(b, b + 14, PISOS[n])))
 
         # Trabajo de cada obra (la roca y la arcilla cuestan más)
         coste = {HUMUS: 0.8, ARENA: 1.0, ARCILLA: 1.4, ROCA: 3.0}
-        for o in [o for g in grupos for o in g] + extras:
+        for o in obras:
             o.trabajo = sum(coste[self.suelo[y * ANCHO + x]] for x, y in o.celdas)
             o.roca = any(self.suelo[y * ANCHO + x] == ROCA for x, y in o.celdas)
-        # El año se reparte en partes iguales, una por sala nueva: cada sala se termina justo al
-        # final de su parte (una cada dias/N días). Lo demás se reparte entre las partes y se
-        # cava antes que la sala. Dentro de cada parte cavan más en primavera y menos en invierno.
-        if not grupos:
-            grupos = [[]]
-        # cada obra extra va en la parte que le toca por turno, pero nunca antes de que exista
-        # el túnel del que sale (y dentro de su parte, justo antes de la sala)
-        hechas = set(self.obras[0].celdas)
-        listo = []
-        for g in grupos:
-            hechas.update(c for o in g for c in o.celdas)
-            listo.append(set(hechas))
-        for i, o in enumerate(extras):
-            k = i % len(grupos)
-            while k < len(grupos) - 1 and o.celdas[0] not in listo[k]:
-                k += 1
-            g = grupos[k]
-            g.insert(len(g) - 1 if g and g[-1].tipo == "sala" else len(g), o)
-            listo[k].update(o.celdas)
-        self.salas_del_año = sum(1 for g in grupos for o in g if o.tipo == "sala")
-        self.intervalo = dias / max(1, self.salas_del_año)
+        # Repartir el trabajo para que dure el año: cavan más en primavera y menos en invierno
         ritmo = {"invierno": 0.5, "primavera": 1.3, "verano": 1.0, "otoño": 0.9}
-        paso = 0.25
-        capacidad = [ritmo[estacion(self.fundacion + datetime.timedelta(days=int(k * paso)))]
-                     for k in range(int(dias / paso) + 8)]
-        for k, grupo in enumerate(grupos):
-            ini = 1.0 + (dias - 1.0) * k / len(grupos) + rng.uniform(2, 6)   # unos días de descanso
-            fin = 1.0 + (dias - 1.0) * (k + 1) / len(grupos)
-            trabajo = sum(o.trabajo for o in grupo)
-            cap = sum(capacidad[int(ini / paso):int(fin / paso)]) or 1.0
-            escala = trabajo / cap               # cuánto cavan por unidad de "ganas" en esta parte
-            dia = ini
-            for o in grupo:
-                o.ini = dia
-                restante = o.trabajo
-                while restante > 1e-9 and dia < fin:
-                    restante -= capacidad[min(len(capacidad) - 1, int(dia / paso))] * escala
-                    dia += paso
-                o.fin = min(dia, fin) if o is not grupo[-1] else fin
-                self.obras.append(o)
-                if o.sala:
-                    self._obra_sala[o.sala.clave] = o
+        descansos = [rng.uniform(2, 6) for _ in obras]
+        dias_trabajo = dias - sum(descansos)
+        capacidad = []
+        for d in range(int(dias_trabajo * 2) + 400):
+            f = self.fundacion + datetime.timedelta(days=d)
+            capacidad.append(ritmo[estacion(f)])
+        total = sum(o.trabajo for o in obras)
+        cap_total = sum(capacidad[:int(dias)])
+        escala = total / max(1e-6, cap_total * (dias_trabajo / dias))
+        dia = 1.0
+        for o, desc in zip(obras, descansos):
+            o.ini = dia
+            restante = o.trabajo
+            while restante > 0:
+                c = capacidad[min(len(capacidad) - 1, int(dia))] * escala * 0.25
+                restante -= c
+                dia += 0.25
+            o.fin = dia
+            dia += desc
+            self.obras.append(o)
+            if o.sala:
+                self._obra_sala[o.sala.clave] = o
 
     def _poner_objetos(self):
         rng = random.Random("objetos-%s" % self.semilla)

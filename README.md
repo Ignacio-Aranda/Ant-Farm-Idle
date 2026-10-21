@@ -91,12 +91,6 @@ biblioteca, se pueden cambiar en `[nido]`) se ponen en los huecos libres. Si ya 
 caben, abren una planta más honda con una rampa nueva o las hacen más estrechas; si
 el hormiguero está lleno del todo, se quedan sin hacer y lo cuenta el diario.
 
-Como al arrancar ya se sabe cuántas caben, el año se reparte en partes iguales: con 5
-salas, se inaugura una cada 73 días. Dentro de cada parte se calcula a qué ritmo hay
-que cavar para terminar a tiempo (más deprisa en primavera, más despacio en invierno),
-y las hormigas van al frente de obra a sacar tierra. El avance depende sólo de la
-fecha: si se apaga la pantalla unos días, al volver está igual de excavado.
-
 ### Paisaje
 
 En `config.toml` se elige lo que hay arriba y dónde (en % del ancho de la pantalla):
