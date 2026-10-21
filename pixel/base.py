@@ -81,6 +81,8 @@ def multiplicar(s, color):
     t = s.copy()
     t.set_colorkey(None)
     t.fill(color, special_flags=pygame.BLEND_RGB_MULT)
+    if s.get_flags() & pygame.SRCALPHA:   # con canal alfa (los textos) no hay color clave
+        return t
     return _reclavar(s, t)
 
 
@@ -132,6 +134,7 @@ class Letras:
         self.fuentes = {}
         self.ruta = ruta
         self.cache = {}
+        self.recortes = {}
 
     def fuente(self, tam):
         f = self.fuentes.get(tam)
@@ -162,6 +165,29 @@ class Letras:
             self.cache.clear()
         self.cache[clave] = s
         return s
+
+    def recortar(self, texto, ancho, tam=9):
+        """El texto tal cual si cabe en 'ancho' píxeles; si no, hasta la última palabra que
+        cabe y con «…» (letra a letra sólo si no cabe ni la primera palabra)."""
+        clave = (texto, ancho, tam)
+        r = self.recortes.get(clave)
+        if r is None:
+            f = self.fuente(tam)
+
+            def cabe(t):
+                return f.size(t)[0] <= ancho
+            r = texto
+            if not cabe(texto):
+                palabras = texto.split(" ")
+                cortes = (" ".join(palabras[:n]).rstrip(" ,;:·-") for n in range(len(palabras) - 1, 0, -1))
+                r = next((c + "…" for c in cortes if c and cabe(c + "…")), None)
+                if r is None:
+                    r = next((texto[:n] + "…" for n in range(len(texto) - 1, 0, -1) if cabe(texto[:n] + "…")),
+                             "…")
+            if len(self.recortes) > 200:
+                self.recortes.clear()
+            self.recortes[clave] = r
+        return r
 
 
 def reloj_grande(texto, color, bloque=3):

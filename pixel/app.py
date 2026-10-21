@@ -93,11 +93,19 @@ def preparar(args):
     return A, cfg, salas, idos, fiestas, avisos
 
 
+def iniciar_pygame():
+    """Sólo la pantalla y las letras. pygame.init() arranca también el sonido (PulseAudio), que no
+    se usa y puede dejar el proceso colgado al salir con sus hilos abiertos."""
+    import pygame
+    pygame.display.init()
+    pygame.font.init()
+
+
 def sin_pantalla(args):
     os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
     import pygame
     A, cfg, salas, idos, fiestas, avisos = preparar(args)
-    pygame.init()
+    iniciar_pygame()
     pantalla = pygame.display.set_mode((640, 512))
     from hormiga.mundo import Mundo
     from .render import Render
@@ -140,7 +148,7 @@ def firma(args):
 def con_pantalla(args):
     import pygame
     A, cfg, salas, idos, fiestas, avisos = preparar(args)
-    pygame.init()
+    iniciar_pygame()
     pygame.mouse.set_visible(False)
     flags = pygame.SCALED
     if not args.ventana:

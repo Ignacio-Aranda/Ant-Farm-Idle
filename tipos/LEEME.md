@@ -32,6 +32,7 @@ aparece = 0           # opcional: día del hormiguero en que aparece (sale en el
 En el suelo: `izquierda`, `centro_izquierda`, `centro`, `centro_derecha`, `derecha`.
 En la pared: `pared_izquierda`, `pared`, `pared_derecha`.
 Cada pieza ya sabe si va en el suelo o en la pared; si no pones `sitio`, usa el suyo.
+Si una pieza no cabe en la sala (en las más estrechas), no se pinta y sale un aviso.
 
 ## Piezas
 

@@ -11,7 +11,7 @@ import random
 
 import pygame
 
-from .base import rgb
+from .base import CW, rgb
 
 MADERA = (126, 82, 46)
 MADERA_OSC = (92, 58, 32)
@@ -276,6 +276,11 @@ def revisar(muebles, donde, avisos):
         except ValueError:
             if str(sitio).lower() not in huecos:
                 avisos.append("%s: no existe el hueco «%s» (%s va a su sitio de siempre)" % (donde, sitio, pieza))
+
+
+def ancho_minimo(pieza):
+    """Columnas que necesita una sala para la pieza (colocar deja 4 píxeles a cada lado)."""
+    return math.ceil((PIEZAS[pieza][0] + 8) / CW)
 
 
 def colocar(pieza, sitio, r):

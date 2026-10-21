@@ -81,6 +81,8 @@ class Render:
         self.detalles = self._detalles_tierra()
         self.tiles = self._tiles()
         self.hierba = {}
+        self.cementerio_px = None
+        self.carteles = {}
         self.fuegos = []      # [x, y, vx, vy, color, vida]
         self.t_prev = 0.0
 
@@ -184,7 +186,9 @@ class Render:
         dia = ((46, 124, 214), (150, 206, 242))
         alba = ((80, 86, 160), (246, 168, 112))
         tarde = ((70, 60, 130), (248, 132, 82))
-        T_ = 40.0
+        # amanecer y atardecer, de 40 minutos como mucho: menos si el día o la noche son más cortos,
+        # y ninguno en la noche polar (a == p) ni con el sol de medianoche (0, 1440)
+        T_ = min(40.0, (p - a) / 2, (1440 - p + a) / 2)
         if abs(mins - a) < T_:
             t = (mins - a + T_) / (2 * T_)
             arriba = mezclar(noche[0], alba[0], min(1, t * 2)) if t < 0.5 else mezclar(alba[0], dia[0], (t - 0.5) * 2)
@@ -381,7 +385,7 @@ class Render:
     def _clave_superficie(self):
         m = self.m
         return (m.ahora.date(), m.de_noche, frozenset(m.decoraciones), tuple(m.cumples), tuple(m.idos),
-                tuple(m.salidas_x), m.plan.total_cavado() // 600, m.llovio_semana, m.nevado)
+                tuple(m.salidas_x), m.plan.total_cavado() // 600, m.llovio, m.llovio_semana, m.nevado)
 
     def _superficie(self):
         clave = self._clave_superficie()
@@ -392,10 +396,12 @@ class Render:
             m = self.m
             if m.nevado:
                 _nevar(s, self.G)
-            for img, pos in self._textos_superficie:   # los letreros, encima de la nieve
-                s.blit(img, pos)
+            # los letreros van aparte y se pegan encima de la capa (y de la nieve) en cada fotograma:
+            # sus bordes suavizados, mezclados con el color clave, saldrían con un halo magenta
+            self.letreros_sup = self._textos_superficie
             if m.de_noche:
                 s = multiplicar(s, (110, 120, 170))
+                self.letreros_sup = [(multiplicar(img, (110, 120, 170)), pos) for img, pos in self.letreros_sup]
                 # de noche se encienden las ventanas y las farolas
                 dia = m.dia_natural
                 for k, (pieza, x) in enumerate(m.superficie.piezas_suelo):
@@ -404,6 +410,8 @@ class Render:
                         luces(s, self.px(x), self.G, PA.Contexto(dia, m.semilla, True, k))
             self.capa_sup = s
         self.dst.blit(self.capa_sup, (0, 0))
+        for img, pos in self.letreros_sup:
+            self.dst.blit(img, pos)
 
     def _pintar_superficie(self, s):
         m = self.m
@@ -433,8 +441,8 @@ class Render:
                 for k in range(3):
                     s.blit(self.S["regalos"][k], (sx0 + 66 + k * 14, G - 12))
         if "halloween" in deco:
-            for k in range(4):
-                s.blit(self.S["calabaza"], (30 + k * self.W // 5, G - 14))
+            for x in self._calabazas():
+                s.blit(self.S["calabaza"], (x, G - 14))
         if "cruces" in deco:
             s.blit(self.S["cruz"], (sx0 + 52, G - 18))
         if "libro" in deco:
@@ -490,38 +498,54 @@ class Render:
                 if col == (250, 250, 250):
                     s.set_at((px_, G - h), (240, 200, 40))
 
+    def _calabazas(self):
+        """Dónde van las calabazas de Halloween: repartidas, sin tapar las lápidas."""
+        out = []
+        for k in range(4):
+            x = 30 + k * self.W // 5
+            if self.cementerio_px and x + 16 > self.cementerio_px[0] and x < self.cementerio_px[1]:
+                x = self.cementerio_px[0] - 18 if self.cementerio_px[0] >= 18 else self.cementerio_px[1] + 2
+            out.append(x)
+        return out
+
     def _cementerio(self, s, G):
         m = self.m
+        self.cementerio_px = None   # de dónde a dónde va (en píxeles), para no taparlo
         if not m.idos:
             return
         sup = m.superficie
-        anchos = [max(5, len(n) + 2) for n in m.idos]
-        total = sum(anchos) + len(anchos) + 3
-        x = min(sup.cementerio_x, m.plan_ancho - total - 2)
         # que no quede encima de una salida (los montículos de tierra la taparían)
-        def choca(x0):
+        def choca(x0, total):
             return any(x0 - 8 <= s <= x0 + total + 8 for s in m.salidas_x_grid)
-        if choca(x):
-            libres = [x0 for x0 in range(2, m.plan_ancho - total - 2) if not choca(x0)]
-            if libres:
-                x = min(libres, key=lambda x0: abs(x0 - x))
+        # cada lápida, tan ancha como su nombre (con margen); si no hay sitio, con letra más pequeña
+        for tam in (7, 6, 5):
+            textos = [self.letras.texto(n, (40, 40, 48), tam, sombra=False) for n in m.idos]
+            anchos = [max(5, math.ceil((t.get_width() + 8) / CW)) for t in textos]
+            total = sum(anchos) + len(anchos) + 3
+            x = min(sup.cementerio_x, m.plan_ancho - total - 2)
+            if choca(x, total):
+                libres = [x0 for x0 in range(2, m.plan_ancho - total - 2) if not choca(x0, total)]
+                if libres:
+                    x = min(libres, key=lambda x0: abs(x0 - x))
+            if not choca(x, total):
+                break
         x0 = self.px(x)
         # valla
         ancho_px = self.px(total)
+        self.cementerio_px = (x0, x0 + ancho_px)
         pygame.draw.line(s, (120, 90, 60), (x0, G - 5), (x0 + ancho_px, G - 5))
         for k in range(0, ancho_px + 1, 6):
             pygame.draw.line(s, (120, 90, 60), (x0 + k, G - 8), (x0 + k, G))
         rip = self.letras.texto("R.I.P.", (200, 200, 205), 8)
         self._textos_superficie.append((rip, (x0 + ancho_px // 2 - rip.get_width() // 2, G - 34)))
         cx = x0 + 8
-        for nombre, w in zip(m.idos, anchos):
+        for t, w in zip(textos, anchos):
             ancho = self.px(w) - 2
             lap = pygame.Rect(cx, G - 22, ancho, 22)
             pygame.draw.rect(s, (110, 110, 118), lap, border_top_left_radius=6, border_top_right_radius=6)
             pygame.draw.rect(s, (150, 150, 158), lap.inflate(-4, -4), border_top_left_radius=4,
                              border_top_right_radius=4)
-            t = self.letras.texto(nombre, (40, 40, 48), 7, sombra=False)
-            s.blit(t, (cx + ancho // 2 - t.get_width() // 2, G - 15))
+            s.blit(t, (cx + ancho // 2 - t.get_width() // 2, G - 15 + (7 - tam) // 2))
             pygame.draw.line(s, (90, 90, 96), (cx + ancho // 2, G - 20), (cx + ancho // 2, G - 17))
             pygame.draw.line(s, (90, 90, 96), (cx + ancho // 2 - 2, G - 19), (cx + ancho // 2 + 2, G - 19))
             if "difuntos" in m.decoraciones:
@@ -760,17 +784,33 @@ class Render:
             # muebles (estáticos)
             self._muebles(s, sala, r, suelo_y)
             # cartel con el nombre
-            col = rgb(sala.color) if sala.color else (230, 230, 230)
-            t = self.letras.texto(sala.nombre, col if sala.principal else (230, 225, 215), 8, sombra=False)
-            w = t.get_width() + 8
-            cx = r.centerx - w // 2
-            pygame.draw.rect(s, (60, 38, 22), (cx, r.y + 1, w, 11))
-            pygame.draw.rect(s, (120, 80, 48), (cx, r.y + 1, w, 11), 1)
-            s.blit(t, (cx + 4, r.y + 1))
+            t, cartel = self._cartel(sala, r)
+            pygame.draw.rect(s, (60, 38, 22), cartel)
+            pygame.draw.rect(s, (120, 80, 48), cartel, 1)
+            s.blit(t, (cartel.x + 4, cartel.y + (cartel.height - t.get_height()) // 2))
         # hallazgos
         for x, y, nombre, icono, col, dia in m.plan.objetos:
             if dia <= m.dia_obras:
                 self._objeto(s, self.px(m.ox + x), y * CH + 2, nombre, rgb(col))
+
+    def _cartel(self, sala, r):
+        """El cartel con el nombre, centrado arriba en la sala r: (texto, rectángulo). En las salas
+        estrechas, con letra más pequeña o recortado, para que no se salga de la sala."""
+        clave = (sala.nombre, sala.color, sala.principal, r.width)
+        t = self.carteles.get(clave)   # se pide en cada fotograma (para las lámparas y los nombres)
+        if t is None:
+            col = rgb(sala.color) if sala.color else (230, 230, 230)
+            col = col if sala.principal else (230, 225, 215)
+            cabe = r.width - 12   # el texto, con 4 píxeles a cada lado dentro del cartel y 2 fuera
+            for tam in (8, 7, 6):
+                t = self.letras.texto(sala.nombre, col, tam, sombra=False)
+                if t.get_width() <= cabe:
+                    break
+            else:   # ni con la letra más pequeña: recortado, con la de 7
+                t = self.letras.texto(self.letras.recortar(sala.nombre, cabe, 7), col, 7, sombra=False)
+            self.carteles[clave] = t
+        w = t.get_width() + 8
+        return t, pygame.Rect(r.centerx - w // 2, r.y + 1, w, 11)
 
     def _objeto(self, s, x, y, nombre, col):
         if "peseta" in nombre or "moneda" in nombre:
@@ -821,6 +861,10 @@ class Render:
                 aparece = 0
             if aparece > dia:
                 continue
+            if sala.ancho < MU.ancho_minimo(pieza):   # no se pinta: se saldría de la sala
+                self._aviso("%s: «%s» no cabe en la sala (tiene %d columnas y hacen falta %d)"
+                            % (sala.nombre, pieza, sala.ancho, MU.ancho_minimo(pieza)))
+                continue
             k = cuenta[pieza] = cuenta.get(pieza, -1) + 1
             out.append((pieza, mu.get("sitio"), MU.Contexto(self, dia, aparece, k)))
         return out
@@ -854,7 +898,7 @@ class Render:
         etiquetas = self._hormigas(t)
         self._lluvia(t)
         self._pancarta(t)
-        self._nombres(etiquetas)
+        self._nombres(etiquetas, self.textos_salas)
         self._hud()
         self._diario()
 
@@ -917,9 +961,9 @@ class Render:
             pygame.draw.line(dst, (90, 60, 40), (hx - 8, G - 3), (hx + 8, G - 1), 2)
             dst.blit(self.halo_farola, (hx - 40, G - 50), special_flags=pygame.BLEND_ADD)
         if "halloween" in deco and noche:
-            for k in range(4):
+            for k, x in enumerate(self._calabazas()):
                 if int(t * 4 + k) % 3:
-                    dst.fill((255, 220, 90), (30 + k * self.W // 5 + 6, G - 8, 4, 2))
+                    dst.fill((255, 220, 90), (x + 6, G - 8, 4, 2))
         if "semana_santa" in deco and 18 <= m.ahora.hour <= 23:
             ciclo = (t * 12) % (self.W + 160) - 80
             dst.blit(self.S["trono"], (int(ciclo), G - 12))
@@ -1082,10 +1126,11 @@ class Render:
         deco = m.decoraciones
         reloj_x = self.W - 110
         if "feria" in deco or "navidad" in deco or "banderines" in deco or "andalucia" in deco:
-            # guirnalda de farolillos / luces / banderines de lado a lado
-            for x in range(4, reloj_x, 8):
-                y = 22 + int(8 * math.sin(math.pi * (x % 120) / 120))
-                k = x // 8
+            # guirnalda de farolillos / luces / banderines, de los textos de arriba al reloj (sin taparlos)
+            x0 = 10 + max(x + img.get_width() for img, (x, _y) in self._textos_hud())
+            for x in range(x0, reloj_x, 8):
+                y = 22 + int(8 * math.sin(math.pi * ((x - x0) % 120) / 120))
+                k = (x - x0) // 8
                 if "feria" in deco:
                     c = COLORES_FIESTA[k % 4]
                     pygame.draw.ellipse(dst, c, (x - 2, y, 5, 6))
@@ -1099,7 +1144,7 @@ class Render:
                 else:
                     pygame.draw.polygon(dst, COLORES_FIESTA[k % 6], [(x - 3, y), (x + 3, y), (x, y + 6)])
                 if x + 8 < reloj_x:
-                    y2 = 22 + int(8 * math.sin(math.pi * ((x + 8) % 120) / 120))
+                    y2 = 22 + int(8 * math.sin(math.pi * ((x + 8 - x0) % 120) / 120))
                     pygame.draw.line(dst, (90, 80, 70), (x, y), (x + 8, y2))
         if "pi" in deco:
             t2 = self.letras.texto("π = 3,14159265...", (255, 230, 120), 11)
@@ -1163,60 +1208,102 @@ class Render:
         for h in m.hormigas.values():
             if h.nombre in m.cumples:
                 cumple_en.setdefault(h.sala, []).append(h.nombre)
+        self.textos_salas = []   # carteles y frases de cumpleaños: los nombres de las hormigas no los tapan
         for sala in m.salas:
             r = self._rect_sala(sala).move(0, G)
             suelo = r.bottom
-            # lámparas con luz cálida
+            cartel = self._cartel(sala, r)[1]
+            self.textos_salas.append(cartel)
+            # lámparas con luz cálida, sin tapar el cartel: a un lado o, si no caben, colgadas de él
             xs = [r.x + r.width // 4, r.x + 3 * r.width // 4] if r.width > 96 else [r.centerx]
+            lamparas = []
             for lx in xs:
-                pygame.draw.line(dst, (60, 60, 60), (lx, r.y), (lx, r.y + 8))
-                pygame.draw.polygon(dst, (170, 150, 90), [(lx - 4, r.y + 12), (lx + 4, r.y + 12), (lx + 2, r.y + 8),
-                                                          (lx - 2, r.y + 8)])
-                dst.fill((255, 240, 170), (lx - 1, r.y + 12, 3, 2))
-                dst.blit(self.halo_lampara, (lx - 26, r.y - 10), special_flags=pygame.BLEND_ADD)
+                techo = r.y
+                if cartel.left - 6 < lx < cartel.right + 6:
+                    lado = cartel.left - 7 if lx < cartel.centerx else cartel.right + 7
+                    if r.x + 6 <= lado <= r.right - 7:
+                        lx = lado
+                    else:
+                        techo = cartel.bottom
+                y = r.y if techo == r.y else techo - 6   # colgada del cartel, con el cable más corto
+                pygame.draw.line(dst, (60, 60, 60), (lx, techo), (lx, y + 8))
+                pygame.draw.polygon(dst, (170, 150, 90), [(lx - 4, y + 12), (lx + 4, y + 12), (lx + 2, y + 8),
+                                                          (lx - 2, y + 8)])
+                dst.fill((255, 240, 170), (lx - 1, y + 12, 3, 2))
+                dst.blit(self.halo_lampara, (lx - 26, y - 10), special_flags=pygame.BLEND_ADD)
+                lamparas.append(pygame.Rect(lx - 4, techo, 9, y + 14 - techo))
             # lo que se mueve en los muebles (pantallas, vapor, burbujas, relojes)
             for pieza, sitio, ctx in self._piezas_vivas(sala):
                 x, y = MU.colocar(pieza, sitio, r)
                 MU.PIEZAS[pieza][4](dst, x, y, r, ctx, t)
+            # el cumpleaños: la frase, debajo del cartel (y de las lámparas que cuelguen de él)
+            frase = None
+            nombres = cumple_en.get(sala.clave)
+            if nombres:
+                for texto, tam in (("¡Feliz cumple, %s!" % " y ".join(nombres), 8), ("¡Feliz cumple!", 8),
+                                   ("¡Feliz cumple!", 7), ("¡Feliz cumple!", 6)):
+                    txt = self.letras.texto(texto, (255, 230, 90), tam)
+                    if txt.get_width() <= r.width - 8:
+                        frase = pygame.Rect(r.centerx - txt.get_width() // 2, r.y + 14, *txt.get_size())
+                        break
+                if frase:
+                    frase.top = max([frase.top] + [lp.bottom for lp in lamparas
+                                                   if lp.left < frase.right and frase.left < lp.right])
+                    self.textos_salas.append(frase)
+
+            def libre(rect):   # sólo se mira si hay frase: (not frase or libre(...))
+                return not frase.colliderect(rect)
             festiva = sala.funcion in ("trabajo", "comedor", "reuniones", "despacho")
-            # fiestas dentro de las salas
+            # fiestas dentro de las salas (sin pisar la frase del cumpleaños ni salirse de la sala)
             if "navidad" in deco:
                 for k, x in enumerate(range(r.x + 6, r.right - 6, 6)):
-                    if (int(t * 2) + k) % 3:
+                    if (int(t * 2) + k) % 3 and (not frase or libre((x, r.y + 14 + (k % 2), 2, 2))):
                         dst.fill(COLORES_FIESTA[k % 6], (x, r.y + 14 + (k % 2), 2, 2))
                 if festiva:
                     self._pino(dst, r.right - 34, suelo)
             if "feria" in deco:
                 for k, x in enumerate(range(r.x + 8, r.right - 8, 10)):
                     c = COLORES_FIESTA[k % 4]
-                    pygame.draw.ellipse(dst, c, (x, r.y + 13 + (k % 2) * 2, 5, 6))
+                    farolillo = (x, r.y + 13 + (k % 2) * 2, 5, 6)
+                    if not frase or libre(farolillo):
+                        pygame.draw.ellipse(dst, c, farolillo)
             if "halloween" in deco:
-                for i in range(6):
-                    pygame.draw.line(dst, (200, 200, 200), (r.x + 2, r.y + 2), (r.x + 2 + i * 3, r.y + 18 - i * 2))
+                # la telaraña, en la esquina y sin llegar al cartel (más pequeña si no cabe)
+                f = min(1.0, (cartel.left - r.x - 4) / 15)
+                if f > 0.3:
+                    for i in range(6):
+                        pygame.draw.line(dst, (200, 200, 200), (r.x + 2, r.y + 2),
+                                         (r.x + 2 + int(i * 3 * f), r.y + 18 - i * 2))
                 if festiva:
                     dst.blit(self.S["calabaza"], (r.right - 24, suelo - 14))
-            if ("andalucia" in deco or "espana" in deco) and festiva:
+            if ("andalucia" in deco or "espana" in deco) and festiva and \
+                    (not frase or libre((r.x + 6, r.y + 16, 12, 9))):
                 cols = ((40, 150, 70), (245, 245, 245), (40, 150, 70)) if "andalucia" in deco else \
                     ((200, 30, 40), (250, 200, 30), (200, 30, 40))
                 for k, c in enumerate(cols):
                     dst.fill(c, (r.x + 6, r.y + 16 + k * 3, 12, 3))
             if "nochevieja" in deco and sala.funcion == "comedor":
                 for k in range(12):
-                    pygame.draw.circle(dst, (130, 190, 70), (r.x + 44 + k * 4, suelo - 14), 2)
+                    if r.x + 46 + k * 4 <= r.right - 4:
+                        pygame.draw.circle(dst, (130, 190, 70), (r.x + 44 + k * 4, suelo - 14), 2)
             if "carnaval" in deco:
                 for k in range(8):
-                    x = r.x + (int(t * 20) * 7 + k * 37) % max(1, r.width)
-                    dst.fill(COLORES_FIESTA[k % 6], (x, r.y + 14 + (k * 7) % (r.height - 20), 2, 2))
-            nombres = cumple_en.get(sala.clave)
+                    x = r.x + (int(t * 20) * 7 + k * 37) % max(1, r.width - 1)
+                    y = r.y + 14 + (k * 7) % (r.height - 20)
+                    if not frase or libre((x, y, 2, 2)):
+                        dst.fill(COLORES_FIESTA[k % 6], (x, y, 2, 2))
             if nombres:
+                # los globos: a los dos lados de la frase o, si no cabe, repartidos por la sala
                 for k, g in enumerate(self.S["globos"]):
-                    gx = r.x + 10 + k * (r.width - 20) // 6
-                    dst.blit(g, (gx, r.y + 14 + int(math.sin(t * 2 + k) * 2)))
-                frase = "¡Feliz cumple, %s!" % " y ".join(nombres)
-                txt = self.letras.texto(frase, (255, 230, 90), 8)
-                if txt.get_width() > r.width - 8:
-                    txt = self.letras.texto("¡Feliz cumple!", (255, 230, 90), 8)
-                dst.blit(txt, (r.centerx - txt.get_width() // 2, r.y + 26))
+                    if frase:
+                        gx = frase.left - 9 - k // 2 * 8 if k % 2 == 0 else frase.right + 4 + k // 2 * 8
+                    else:
+                        gx = r.x + 10 + k * (r.width - 20) // 6
+                    globo = g.get_rect(topleft=(gx, r.y + 14 + int(math.sin(t * 2 + k) * 2)))
+                    if r.x + 3 <= globo.left and globo.right <= r.right - 3 and globo.collidelist(lamparas) == -1:
+                        dst.blit(g, globo)
+                if frase:
+                    dst.blit(txt, frase)
 
     def _debajo(self, t):
         m = self.m
@@ -1310,27 +1397,25 @@ class Render:
         elif gorro == "antifaz":
             dst.fill((40, 160, 200), (cx - 2, y + 3, 6, 2))
 
-    def _nombres(self, etiquetas):
-        """Nombres siempre encima; si chocan, uno sube."""
-        ocupado = []
+    def _nombres(self, etiquetas, textos=()):
+        """Nombres siempre encima; si chocan, uno sube. Los textos de las salas (carteles y frases
+        de cumpleaños) no se tapan: si no queda otro sitio, antes se monta sobre otro nombre."""
+        ocupado = list(textos)
         # primero las despiertas (siempre se ven); las dormidas sólo si caben
         for cx, y, nombre, col, dormida in sorted(etiquetas, key=lambda e: (e[4], e[1], e[0])):
             s = self.letras.texto(nombre, claro(col, 0.25) if not dormida else oscuro(claro(col, 0.25), 0.7), 8)
             w, h = s.get_size()
             x = cx - w // 2
-            libre = False
-            for fila in range(5):
-                for dx in (0, -w // 2 - 2, w // 2 + 2):
-                    r = pygame.Rect(x + dx, y - h - fila * (h - 1), w, h)
-                    if r.collidelist(ocupado) == -1:
-                        libre = True
-                        break
-                if libre:
-                    break
-            if not libre:
-                r = pygame.Rect(x, y - h, w, h)
-            if dormida and not libre:
-                continue
+
+            def sitios():
+                for fila in range(5):
+                    for dx in (0, -w // 2 - 2, w // 2 + 2):
+                        yield pygame.Rect(x + dx, y - h - fila * (h - 1), w, h)
+            r = next((c for c in sitios() if c.collidelist(ocupado) == -1), None)
+            if r is None:
+                if dormida:
+                    continue
+                r = next((c for c in sitios() if c.collidelist(textos) == -1), pygame.Rect(x, y - h, w, h))
             ocupado.append(r)
             self.dst.blit(s, r.topleft)
 
@@ -1353,28 +1438,35 @@ class Render:
             txt = self.letras.texto(m.fiesta_mensaje, (255, 236, 120), 11)
             dst.blit(txt, (self.W // 2 - txt.get_width() // 2, 44))
 
-    def _hud(self):
+    def _textos_hud(self):
+        """Los textos de arriba a la izquierda: [(imagen, posición)]."""
         m = self.m
-        dst = self.dst
         a = m.ahora
         dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
         meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre",
                  "octubre", "noviembre", "diciembre"]
         fecha = "%s, %d de %s de %d" % (dias[a.weekday()], a.day, meses[a.month - 1], a.year)
-        dst.blit(self.letras.texto(fecha, (255, 255, 255), 11), (6, 4))
-        info = "Día %d del hormiguero · %s · %.0f °C%s" % (int(m.dia), m.estacion, m.temperatura,
-                                                           (" · nieve" if m.nieve else " · lluvia") if m.lluvia else "")
-        dst.blit(self.letras.texto(info, (225, 230, 240), 9), (6, 18))
-        hora = a.strftime("%H:%M")
+        out = [(self.letras.texto(fecha, (255, 255, 255), 11), (6, 4))]
+        # redondeada antes: con "%.0f", de -0,5 a 0 grados saldría «-0 °C»
+        info = "Día %d del hormiguero · %s · %d °C%s" % (int(m.dia), m.estacion, round(m.temperatura),
+                                                         (" · nieve" if m.nieve else " · lluvia") if m.lluvia else "")
+        out.append((self.letras.texto(info, (225, 230, 240), 9), (6, 18)))
+        if m.pausa_texto:
+            out.append((self.letras.texto(" ★ " + m.pausa_texto + " ", (30, 30, 30), 10, fondo=(255, 225, 90)),
+                        (6, 31)))
+        elif m.demo_texto:
+            out.append((self.letras.texto(m.demo_texto, (200, 205, 220), 8), (6, 31)))
+        return out
+
+    def _hud(self):
+        dst = self.dst
+        for img, pos in self._textos_hud():
+            dst.blit(img, pos)
+        hora = self.m.ahora.strftime("%H:%M")
         if self.cache_reloj[0] != hora:
             self.cache_reloj = (hora, reloj_grande(hora, (255, 255, 255), 3))
         img = self.cache_reloj[1]
         dst.blit(img, (self.W - img.get_width() - 8, 6))
-        if m.pausa_texto:
-            t = self.letras.texto(" ★ " + m.pausa_texto + " ", (30, 30, 30), 10, fondo=(255, 225, 90))
-            dst.blit(t, (6, 31))
-        elif m.demo_texto:
-            dst.blit(self.letras.texto(m.demo_texto, (200, 205, 220), 8), (6, 31))
 
     def _diario(self):
         m = self.m
@@ -1393,6 +1485,7 @@ class Render:
             texto, col = "%s · %s" % (cuando, e[1]), (220, 200, 160)
         else:
             return
+        texto = self.letras.recortar(texto, self.W - 8, 8)   # lo que no cabe, con «…»
         dst.blit(self.letras.texto(texto, col, 8, sombra=False), (4, y - 1))
 
 

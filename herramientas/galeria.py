@@ -40,7 +40,7 @@ def mundo_de_ejemplo():
     args.sin_estado = True
     A, cfg, salas, idos, fiestas, avisos = APP.preparar(args)
     cfg["general"].update(A.POR_DEFECTO["general"])
-    pygame.init()
+    APP.iniciar_pygame()
     pantalla = pygame.display.set_mode((640, 512))
     from hormiga.mundo import Mundo
     reloj = A.crear_reloj(args, cfg, fiestas, salas, idos)
