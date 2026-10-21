@@ -3,5 +3,6 @@ __pycache__/
 capturas/
 *.log
 .venv/
-# datos locales que no se suben (pon aquí tu configuración real si no quieres publicarla)
+# datos locales que no se suben: el estado del hormiguero y tus datos reales (config.toml,
+# salas/, tipos/, idos.toml y calendario.toml en local/ se usan en lugar de los de ejemplo)
 local/

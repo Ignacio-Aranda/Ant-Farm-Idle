@@ -142,11 +142,14 @@ def sala_celdas(sala):
 
 
 class Plan:
-    def __init__(self, semilla, fundacion, principales, dias_obras=330, obras=None, entrada=ENTRADA):
+    def __init__(self, semilla, fundacion, principales, dias_obras=330, obras=None, entrada=ENTRADA,
+                 sur=False):
         """principales: lista de dicts (clave, nombre, color, planta, ancho, x, tipo, funcion).
-        obras: las salas que se excavan durante el año (por defecto OBRAS)."""
+        obras: las salas que se excavan durante el año (por defecto OBRAS).
+        sur: hemisferio sur (las estaciones, y con ellas el ritmo de las obras, al revés)."""
         self.semilla = semilla
         self.fundacion = fundacion
+        self.sur = sur
         self.rng = random.Random("plan-%s" % semilla)
         self.suelo = self._generar_suelo()
         self.entrada_preferida = entrada
@@ -516,7 +519,7 @@ class Plan:
         capacidad = []
         for d in range(int(dias_trabajo * 2) + 400):
             f = self.fundacion + datetime.timedelta(days=d)
-            capacidad.append(ritmo[estacion(f)])
+            capacidad.append(ritmo[estacion(f, self.sur)])
         total = sum(o.trabajo for o in obras)
         cap_total = sum(capacidad[:int(dias)])
         escala = total / max(1e-6, cap_total * (dias_trabajo / dias))

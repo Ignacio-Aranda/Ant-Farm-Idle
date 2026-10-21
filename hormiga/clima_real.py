@@ -8,7 +8,8 @@ Si no hay clave, no hay internet o los datos son viejos, se usa el clima de resp
 de hormiga/tiempo.py.
 
 La clave se busca, por orden, en la variable de entorno OPENWEATHER_API_KEY, en el
-fichero local/openweather_clave.txt y en [tiempo] clave de config.toml.
+fichero local/openweather_clave.txt y en [tiempo] clave de config.toml. El servicio de la
+Pi no ve las variables de la sesión: allí, el fichero (o OPENWEATHER_API_KEY=... en local/entorno).
 """
 
 import datetime
@@ -18,6 +19,8 @@ import threading
 import time
 import urllib.parse
 import urllib.request
+
+from . import tiempo as T
 
 URL = "https://api.openweathermap.org/data/2.5/weather"
 VALIDO = 3 * 3600   # segundos que se fían de los últimos datos si no llegan nuevos
@@ -36,8 +39,9 @@ def _intensidad(codigo):
     return 0.0
 
 
-def _minutos_locales(marca):
-    t = datetime.datetime.fromtimestamp(marca)
+def _minutos_locales(marca, zona=None):
+    """Minutos desde medianoche, en la zona horaria de la ciudad si se da (si no, la del ordenador)."""
+    t = datetime.datetime.fromtimestamp(marca, T.zona_horaria(zona))
     return t.hour * 60 + t.minute + t.second / 60
 
 
@@ -46,7 +50,7 @@ class TiempoReal:
 
     terral = False
 
-    def __init__(self, datos):
+    def __init__(self, datos, zona=None):
         codigo = int(datos["weather"][0]["id"])
         self.codigo = codigo
         self.descripcion = datos["weather"][0].get("description", "")
@@ -59,7 +63,7 @@ class TiempoReal:
         self.temp = float(datos["main"]["temp"])
         self._inten = _intensidad(codigo)
         s = datos.get("sys", {})
-        self.sol = (_minutos_locales(s["sunrise"]), _minutos_locales(s["sunset"])) \
+        self.sol = (_minutos_locales(s["sunrise"], zona), _minutos_locales(s["sunset"], zona)) \
             if s.get("sunrise") and s.get("sunset") else None
 
     def lluvia(self, minuto):
@@ -70,17 +74,18 @@ class TiempoReal:
 
 
 class OpenWeather:
-    def __init__(self, clave, lat, lon, carpeta, cada_minutos=10):
-        self.clave, self.lat, self.lon = clave, lat, lon
+    def __init__(self, clave, lat, lon, carpeta, cada_minutos=10, zona=None):
+        self.clave, self.lat, self.lon, self.zona = clave, lat, lon, zona
         self.cada = max(5, float(cada_minutos)) * 60
         self.ruta = os.path.join(carpeta, "openweather.json")
         self.cerrojo = threading.Lock()
-        self.datos, self.hora = None, 0.0
+        self.datos, self.hora = None, 0.0   # los últimos datos buenos y cuándo llegaron
         self.historial = {}          # "AAAA-MM-DD" -> {"llueve": ..., "tormenta": ..., ...}
         self.ultima_lluvia = None    # marca de tiempo de la última vez que llovía
         self.ultima_nieve = None
         self.error = None
         self._leer()
+        self.proximo = self.hora + self.cada   # cuándo toca pedirlos otra vez
         threading.Thread(target=self._bucle, daemon=True, name="openweather").start()
 
     # ---------------------------------------------------------------- disco
@@ -111,7 +116,7 @@ class OpenWeather:
 
     def _bucle(self):
         while True:
-            if time.time() - self.hora >= self.cada:
+            if time.time() >= self.proximo:
                 self._pedir()
             time.sleep(30)
 
@@ -121,13 +126,15 @@ class OpenWeather:
         try:
             with urllib.request.urlopen(url, timeout=15) as r:
                 datos = json.load(r)
-            real = TiempoReal(datos)
+            real = TiempoReal(datos, self.zona)
         except Exception as e:      # sin red, clave mala, respuesta rara...: se sigue con lo que había
             self.error = str(e)
-            self.hora = time.time() - self.cada + 120   # reintenta en dos minutos
+            # reintenta en dos minutos; los datos de antes conservan su hora (y caducan a su tiempo)
+            self.proximo = time.time() + 120
             return
         ahora = time.time()
-        hoy = datetime.date.today().isoformat()
+        self.proximo = ahora + self.cada
+        hoy = T.ahora(self.zona).date().isoformat()
         with self.cerrojo:
             self.datos, self.hora, self.error = datos, ahora, None
             dia = self.historial.setdefault(hoy, {"llueve": False, "tormenta": False, "nieve": False,
@@ -152,7 +159,7 @@ class OpenWeather:
             if self.datos is None or time.time() - self.hora > VALIDO:
                 return None
             try:
-                return TiempoReal(self.datos)
+                return TiempoReal(self.datos, self.zona)
             except (KeyError, TypeError, ValueError):
                 return None
 
@@ -183,4 +190,4 @@ def desde_config(cfg, raiz):
         return None
     ciudad = cfg.get("ciudad", {})
     return OpenWeather(clave, ciudad.get("lat", 36.72), ciudad.get("lon", -4.42),
-                       os.path.join(raiz, "local"), t.get("cada_minutos", 10))
+                       os.path.join(raiz, "local"), t.get("cada_minutos", 10), ciudad.get("zona_horaria"))

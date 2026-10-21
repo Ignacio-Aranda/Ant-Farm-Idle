@@ -38,7 +38,8 @@ Teclas: `q` o `Esc` para salir, `f` pantalla completa, `i` fotogramas por segund
 
 Todo se configura con ficheros de texto ([TOML](https://toml.io/es/)). Los cambios de
 gente, idas y fiestas se aplican solos a los pocos segundos de guardar; lo demás
-(salas, tipos, paisaje...) al reiniciar.
+(salas, tipos, paisaje...) al reiniciar. Los de este repositorio son de ejemplo: los
+tuyos pueden ir en `local/`, fuera de git (mira [Tus datos](#tus-datos)).
 
 | Fichero | Qué hay |
 |---|---|
@@ -112,16 +113,22 @@ x = 45
 
 ### Tiempo real
 
-Con `[ciudad]` (latitud y longitud) el sol sale y se pone a su hora. Para que además
-llueva, nieve o haya tormenta cuando de verdad pasa en tu ciudad, crea una clave
-gratuita en [OpenWeather](https://openweathermap.org/api) y pásasela de una de estas
-formas (mejor no la pongas en `config.toml` si vas a subirlo a algún sitio):
+Con `[ciudad]` (latitud y longitud) el sol sale y se pone a su hora. Si el ordenador no
+está en la zona horaria de la ciudad, pon también `zona_horaria` (por ejemplo
+`"Europe/Madrid"`): el reloj del hormiguero, los horarios y el sol irán en la hora de la
+ciudad. Para que además llueva, nieve o haya tormenta cuando de verdad pasa en tu
+ciudad, crea una clave gratuita en [OpenWeather](https://openweathermap.org/api) y
+guárdala en `local/openweather_clave.txt` (la carpeta `local/` no se sube a git; mejor
+no la pongas en `config.toml` si vas a subirlo a algún sitio):
 
 ```bash
-export OPENWEATHER_API_KEY=tu_clave
+mkdir -p local && echo tu_clave > local/openweather_clave.txt
 ```
 
-o guárdala en `local/openweather_clave.txt` (la carpeta `local/` no se sube a git).
+Para probar en el ordenador también vale `export OPENWEATHER_API_KEY=tu_clave`, pero el
+servicio de la Pi no ve las variables de tu sesión: allí usa el fichero, o pon la línea
+`OPENWEATHER_API_KEY=tu_clave` en `local/entorno`, que el servicio lee al arrancar (si lo
+instalaste antes de que existiera esta opción, vuelve a ejecutar `instalar-pi.sh`).
 Sin clave, o si se va internet, el tiempo sale de un modelo estadístico.
 
 Cuando nieva, la nieve se queda encima de los árboles, los tejados, las lápidas y el
@@ -135,7 +142,8 @@ esqueleto, también de noche.
 
 ## Reinicios y apagones
 
-La primera vez que arranca (con la hora de verdad, no en `--demo` ni con `--fecha`)
+La primera vez que arranca con la hora de verdad (no en `--demo`, ni con `--fecha`,
+`--hora`, `--dias` o `--acelerar`, ni al hacer capturas con `--captura` o `--medir`)
 crea `local/estado.json`, y en cada arranque lo vuelve a leer, así que reiniciar la Pi
 o el servicio no cambia nada:
 
@@ -143,13 +151,25 @@ o el servicio no cambia nada:
   ya no cambia, aunque entre o se vaya gente.
 - **Dónde estaba cada hormiga**: al volver, sigue en el mismo sitio.
 - **La fecha de fundación y la semilla**, si no están en `config.toml`: la fundación es
-  el día del primer arranque y la semilla se elige al azar una sola vez.
+  el día del primer arranque y la semilla se elige al azar una sola vez. Las pruebas
+  usan las que haya guardadas; si aún no hay, unas de un solo uso que no se guardan.
 - **Lo excavado.** Con `cavar = "encendido"` en `[nido]` (lo normal), las hormigas sólo
   cavan mientras el hormiguero está en marcha: una semana apagado es una semana sin
   obras. Con `cavar = "fecha"`, las obras avanzan con los días aunque esté apagado.
 
-Se guarda cada minuto y al pararlo. Para empezar un hormiguero de cero, borra
-`local/estado.json`.
+Lo excavado y dónde estaba cada hormiga se guardan aparte para cada hormiguero (cada
+fundación y semilla): una prueba con otra semilla (`--semilla 7`) o con otra fundación
+tiene lo suyo y no toca lo del hormiguero de verdad. Si `config.toml` tiene una errata y
+no se puede leer, sigue con el último hormiguero que se guardó.
+
+Se guarda cada minuto y al pararlo, así que para empezar un hormiguero de cero hay que
+borrar `local/estado.json` con el hormiguero parado (si no, lo vuelve a escribir). En la Pi:
+
+```bash
+sudo systemctl stop hormiguero
+rm ~/Ant-Farm-Idle/local/estado.json
+sudo systemctl start hormiguero
+```
 
 ## En una Raspberry Pi
 
@@ -177,14 +197,27 @@ pantalla en negro.
 ## Tus datos
 
 Los ficheros de `salas/`, `idos.toml` y `calendario.toml` de este repositorio son de
-ejemplo, con gente inventada. Si quieres tener los tuyos fuera del repositorio (para
-no subir nombres ni cumpleaños), guárdalos donde quieras y arranca con `--salas`,
-`--tipos`, `--idos`, `--calendario` y `-c` apuntando a ellos.
+ejemplo, con gente inventada. Para usar los tuyos sin subir nombres ni cumpleaños,
+ponlos en la carpeta `local/`, que no se sube a git: si existen `local/config.toml`,
+`local/salas/`, `local/tipos/`, `local/idos.toml` o `local/calendario.toml`, se usan en
+lugar de los del repositorio sin poner ninguna opción, también en el servicio de la Pi.
+Por ejemplo:
+
+```bash
+mkdir -p local
+cp -r salas idos.toml calendario.toml config.toml local/
+```
+
+y edita las copias. Cada uno sustituye entero al del repositorio (si haces
+`local/tipos/`, tiene que tener todos los tipos que uses). Después de crear uno nuevo en
+`local/`, reinicia el hormiguero para que lo vea. También puedes guardarlos en otro sitio
+y arrancar con `--salas`, `--tipos`, `--idos`, `--calendario` y `-c` apuntando a ellos.
 
 ## Galerías
 
 Las imágenes de muebles, tipos de sala y paisaje de `docs/` se regeneran con
-`python3 herramientas/galeria.py` (por ejemplo, después de añadir una pieza nueva).
+`python3 herramientas/galeria.py` (por ejemplo, después de añadir una pieza nueva). Usa
+siempre los ficheros de ejemplo del repositorio (no los de `local/`) y no escribe en `local/`.
 
 ## Licencia
 

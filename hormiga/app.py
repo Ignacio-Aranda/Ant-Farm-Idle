@@ -11,6 +11,7 @@ from motor.sprites import cargar_toml
 
 from . import estado as E
 from . import fiestas as F
+from . import tiempo as T
 from .tierra import ANCHO_MIN, OBRAS, PISOS
 from .tiempo import MALAGA
 
@@ -263,7 +264,7 @@ def _convocadas(salas, avisos):
 
 
 def _revisar_config(cfg, avisos):
-    """Los números de config.toml (también escritos como texto) y las obras de [nido]."""
+    """Los números de config.toml (también escritos como texto), las obras de [nido] y la zona horaria."""
     for seccion, clave, defecto, entero in NUMEROS:
         s = cfg.get(seccion, {})
         if clave in s:
@@ -282,16 +283,34 @@ def _revisar_config(cfg, avisos):
     for n in claves:
         if n not in cfg["tipos"]:
             avisos.append("config: [nido] la obra «%s» no tiene tipo en tipos/ (será una sala vacía)" % n)
+    ciudad = cfg.get("ciudad", {})
+    zona = str(ciudad.pop("zona_horaria", "")).strip()
+    if zona and T.zona_horaria(zona) is None:
+        avisos.append("config: [ciudad] zona_horaria «%s» no existe (p. ej. \"Europe/Madrid\"; "
+                      "uso la del ordenador)" % zona)
+    elif zona:
+        ciudad["zona_horaria"] = zona
+
+
+def guarda_estado(args):
+    """¿Se escribe en local/ (fundación, semilla, lo excavado...)? Sólo con el reloj de verdad:
+    nunca en la demo, con --fecha, --hora, --dias o --acelerar, al hacer capturas o medir, ni
+    desde herramientas/ (que ponen args.sin_estado)."""
+    return not (getattr(args, "sin_estado", False) or args.demo or args.fecha or args.hora
+                or args.dias is not None or args.acelerar != 1.0
+                or getattr(args, "captura", None) or getattr(args, "medir", False))
 
 
 def cargar(args, avisos):
     """config.toml, tipos/, salas/, idos.toml y calendario.toml. Lo que está mal no tumba el
     hormiguero: se avisa (en la franja amarilla) y se usa el valor por defecto."""
+    fallo = False   # config.toml no se ha podido leer: no se sabe si traía fundación y semilla
     for opcion, ruta, defecto in (("-c", args.config, "config.toml"), ("--salas", args.salas, "salas"),
                                   ("--tipos", args.tipos, "tipos"), ("--idos", args.idos, "idos.toml"),
                                   ("--calendario", args.calendario, "calendario.toml")):
         if not os.path.exists(ruta) and os.path.abspath(ruta) != os.path.join(RAIZ, defecto):
             avisos.append("%s: no encuentro %s" % (opcion, ruta))
+            fallo = fallo or opcion == "-c"
     cfg = {k: dict(v) for k, v in POR_DEFECTO.items()}
     general_usuario = {}
     if os.path.exists(args.config):
@@ -307,18 +326,23 @@ def cargar(args, avisos):
                     cfg[k] = v
         except Exception as e:
             avisos.append("config: %s" % e)
+            fallo = True
     if not isinstance(general_usuario, dict):
-        general_usuario = {}
-    # sin fundación o sin semilla en config.toml: las del primer arranque (local/estado.json)
+        general_usuario, fallo = {}, True
+    # sin fundación o sin semilla en config.toml: las del primer arranque (local/estado.json),
+    # que sólo se apuntan con el reloj de verdad. Si config.toml no se ha podido leer, las del
+    # último hormiguero que se guardó: una errata no cambia de hormiguero
     falta_f, falta_s = "fundacion" not in general_usuario, "semilla" not in general_usuario
     mal_f = not falta_f and _dia(general_usuario["fundacion"]) is None
     if mal_f:   # se usa la del primer arranque si la hay (sin crearla), o la de por defecto
         avisos.append("config: fundacion mal escrita (%s), usa AAAA-MM-DD" % general_usuario["fundacion"])
     if falta_f or falta_s or mal_f:
-        fundacion, semilla = E.inicio(RAIZ, falta_f, falta_s)
+        hoy = T.ahora(cfg.get("ciudad", {}).get("zona_horaria")).date()
+        previo = E.ultimo(RAIZ) if fallo else None
+        fundacion, semilla = previo or E.inicio(RAIZ, falta_f, falta_s, guarda_estado(args) and not fallo, hoy)
         if (falta_f or mal_f) and fundacion:
             cfg["general"]["fundacion"] = fundacion
-        if falta_s and semilla:
+        if falta_s and semilla is not None:
             cfg["general"]["semilla"] = semilla
     fundacion = _dia(cfg["general"]["fundacion"]) or _dia(POR_DEFECTO["general"]["fundacion"])
     cfg["general"]["fundacion"] = fundacion.isoformat()
@@ -432,6 +456,9 @@ def fechas_importantes(inicio, fiestas, salas, idos, dias=400):
 
 
 def crear_reloj(args, cfg, fiestas=None, salas=None, idos=None):
+    """La hora del hormiguero: la de verdad (en la zona horaria de la ciudad, si se da) o una
+    simulada (--demo, --fecha, --hora, --dias, --acelerar)."""
+    zona = cfg.get("ciudad", {}).get("zona_horaria")
     if args.demo:
         inicio = datetime.date.fromisoformat(str(cfg["general"]["fundacion"]))
         if args.fecha:
@@ -445,16 +472,16 @@ def crear_reloj(args, cfg, fiestas=None, salas=None, idos=None):
         inicio = datetime.datetime.combine(f, datetime.time(12)) + datetime.timedelta(days=args.dias)
     if args.fecha:
         inicio = datetime.datetime.combine(datetime.date.fromisoformat(args.fecha),
-                                           (inicio or datetime.datetime.now()).time())
+                                           (inicio or T.ahora(zona)).time())
     if args.hora:
         h, m = (int(v) for v in args.hora.split(":"))
-        inicio = (inicio or datetime.datetime.now()).replace(hour=h, minute=m, second=0)
+        inicio = (inicio or T.ahora(zona)).replace(hour=h, minute=m, second=0)
     factor = args.acelerar
     if inicio is None and factor == 1.0:
         def ahora():
-            return datetime.datetime.now()
-        ahora.real = True   # la hora de verdad: el estado se guarda y las obras cuentan
+            return T.ahora(zona)
+        ahora.real = guarda_estado(args)   # la hora de verdad: el estado se guarda y las obras cuentan
         return ahora
-    base = inicio or datetime.datetime.now()
+    base = inicio or T.ahora(zona)
     t0 = time.monotonic()
     return lambda: base + datetime.timedelta(seconds=(time.monotonic() - t0) * factor)

@@ -29,6 +29,8 @@ Conflicts=getty@tty1.service
 User=$USUARIO
 WorkingDirectory=$DIR
 Environment=PYTHONUNBUFFERED=1 HORMIGUERO_FB_INFO=1
+# variables propias (p. ej. OPENWEATHER_API_KEY=...), si existe el fichero
+EnvironmentFile=-$DIR/local/entorno
 # Pinta en el framebuffer (/dev/fb0): con kmsdrm/EGL la pantalla de la Pi 3 se queda en negro
 ExecStart=/usr/bin/python3 $DIR/hormiguero_fb.py
 Restart=always

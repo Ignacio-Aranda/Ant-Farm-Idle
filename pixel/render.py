@@ -397,7 +397,7 @@ class Render:
             if m.de_noche:
                 s = multiplicar(s, (110, 120, 170))
                 # de noche se encienden las ventanas y las farolas
-                dia = m.ahora.timetuple().tm_yday
+                dia = m.dia_natural
                 for k, (pieza, x) in enumerate(m.superficie.piezas_suelo):
                     luces = PA.SUELO.get(pieza, (None, None))[1]
                     if luces:
@@ -410,7 +410,7 @@ class Render:
         self._textos_superficie = []
         sup = m.superficie
         G = self.G
-        dia = m.ahora.timetuple().tm_yday
+        dia = m.dia_natural   # flores, hojas y frutos (en el hemisferio sur, medio año desplazado)
         # charcos
         if m.llovio:
             for cx in sup.charcos:
@@ -883,7 +883,7 @@ class Render:
             ojos = "cerrado" if int(t * 1.3) % 9 == 0 else "abierto"
             dst.blit(self.S[("buho", ojos, 1)], (self.px(sup.buho_x) - 7, G - 52))
         # luciérnagas
-        if noche and 6 <= m.ahora.month <= 8 and m.lluvia == 0:
+        if noche and 6 <= m.mes_natural <= 8 and m.lluvia == 0:
             r = random.Random("luc-%s" % m.ahora.date())
             for k in range(14):
                 bx = r.uniform(0, self.W) + math.sin(t * 0.3 + k) * 20

@@ -25,16 +25,29 @@ NUBES = [0.40, 0.38, 0.35, 0.35, 0.25, 0.12, 0.05, 0.08, 0.18, 0.32, 0.40, 0.45]
 MALAGA = (36.72, -4.42)
 
 
+def zona_horaria(nombre):
+    """La zona horaria con ese nombre (p. ej. "Europe/Madrid"), o None si no se da o no existe."""
+    if not nombre:
+        return None
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo(str(nombre).strip())
+    except Exception:
+        return None
+
+
+def ahora(zona=None):
+    """La hora de ahora (sin zona): la de la ciudad si se da su zona horaria, o la del ordenador."""
+    return datetime.datetime.now(zona_horaria(zona)).replace(tzinfo=None)
+
+
 def desfase_horario(fecha, zona=None):
     """Minutos de diferencia con UTC ese día (con horario de verano), en la zona de la
     ciudad si se da (p. ej. "Europe/Madrid") o en la del ordenador si no."""
     mediodia = datetime.datetime(fecha.year, fecha.month, fecha.day, 12)
-    if zona:
-        try:
-            from zoneinfo import ZoneInfo
-            return mediodia.replace(tzinfo=ZoneInfo(zona)).utcoffset().total_seconds() / 60
-        except Exception:
-            pass
+    z = zona_horaria(zona)
+    if z:
+        return mediodia.replace(tzinfo=z).utcoffset().total_seconds() / 60
     return mediodia.astimezone().utcoffset().total_seconds() / 60
 
 

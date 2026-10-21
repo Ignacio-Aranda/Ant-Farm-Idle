@@ -3,7 +3,7 @@
 [general]
 nombre = "la Oficina"      # sale en el diario: «Se funda el hormiguero de la Oficina: ...»
 # fundacion: el día 0 del hormiguero. Si no la pones, es el día en que se arranca por
-#   primera vez (se guarda en local/estado.json y ya no cambia).
+#   primera vez con la hora de verdad (se guarda en local/estado.json y ya no cambia).
 # fundacion = "2026-01-01"
 # semilla: el número del que sale el trazado de los túneles y la colocación de las salas.
 #   Si no la pones, se elige una al azar la primera vez y se guarda.
@@ -12,15 +12,19 @@ fps_pixel = 20             # fotogramas por segundo de la versión gráfica
 
 [ciudad]
 # Para el sol (amanecer y anochecer) y para el tiempo real. Búscalas en un mapa.
+# Con la latitud negativa (hemisferio sur), las estaciones, las flores y los bichos van al revés.
 nombre = "Málaga"
 lat = 36.72
 lon = -4.42
-# zona_horaria = "Europe/Madrid"   # sólo si el ordenador está en otra zona horaria
+# zona_horaria: la de la ciudad. Si la pones, el reloj del hormiguero, los horarios y el sol
+#   van en la hora de la ciudad aunque el ordenador esté en otra zona (UTC, por ejemplo).
+# zona_horaria = "Europe/Madrid"
 
 [tiempo]
 # fuente = "openweather": tiempo real de https://openweathermap.org (gratis, hace falta una clave).
-#   La clave NO la pongas aquí si vas a subir el repo: usa la variable de entorno
-#   OPENWEATHER_API_KEY o el fichero local/openweather_clave.txt (no se sube).
+#   La clave NO la pongas aquí si vas a subir el repo: usa el fichero
+#   local/openweather_clave.txt (no se sube) o la variable de entorno OPENWEATHER_API_KEY
+#   (para el servicio de la Pi, en local/entorno: OPENWEATHER_API_KEY=tu_clave).
 # fuente = "estadistico": sin internet, con un clima de ejemplo (el de Málaga).
 # Si no hay clave o falla internet, se usa el estadístico.
 fuente = "openweather"

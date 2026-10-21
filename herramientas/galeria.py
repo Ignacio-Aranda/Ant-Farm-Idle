@@ -29,9 +29,17 @@ GRIS = (160, 156, 150)
 
 
 def mundo_de_ejemplo():
-    """Un hormiguero de ejemplo ya crecido (para que la vitrina tenga hallazgos)."""
-    args = APP.argumentos(["--fecha", "2027-03-01", "--hora", "12:00"])
+    """Un hormiguero de ejemplo ya crecido (para que la vitrina tenga hallazgos), siempre el
+    mismo: con los ficheros del repositorio (no los de local/), la fundación y la semilla de
+    por defecto y sin escribir nada en local/."""
+    def r(nombre):
+        return os.path.join(RAIZ, nombre)
+    args = APP.argumentos(["--fecha", "2027-03-01", "--hora", "12:00", "-c", r("config.toml"),
+                           "--salas", r("salas"), "--tipos", r("tipos"), "--idos", r("idos.toml"),
+                           "--calendario", r("calendario.toml")])
+    args.sin_estado = True
     A, cfg, salas, idos, fiestas, avisos = APP.preparar(args)
+    cfg["general"].update(A.POR_DEFECTO["general"])
     pygame.init()
     pantalla = pygame.display.set_mode((640, 512))
     from hormiga.mundo import Mundo

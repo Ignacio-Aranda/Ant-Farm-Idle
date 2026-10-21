@@ -104,7 +104,7 @@ class Vida:
         m, rng = self.m, self.rng
         W = m.plan_ancho
         bueno = not m.de_noche and m.lluvia == 0
-        mes = m.ahora.month
+        mes = m.mes_natural   # las estaciones de la ciudad (en el hemisferio sur, al revés)
         # comida
         self.espera_comida -= dt
         libres = sum(1 for c in self.cosas if c.tipo == "comida" and c.estado == "libre")

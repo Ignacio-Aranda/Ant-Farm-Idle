@@ -44,7 +44,7 @@ class Mundo:
         self.fundacion = _fecha(cfg["general"]["fundacion"])
         # lo que sobrevive a los reinicios (local/estado.json); sólo con el reloj de verdad,
         # nunca en la demo, con otra fecha ni al hacer capturas
-        self.estado = Estado(self.raiz, "%s-%s" % (self.fundacion, self.semilla)) \
+        self.estado = Estado(self.raiz, self.fundacion.isoformat(), self.semilla) \
             if getattr(reloj, "real", False) else None
         self.unicode = True
         self.fiestas = fiestas
@@ -64,8 +64,9 @@ class Mundo:
                      for n in nombres_obras]
         for o in obras:
             o["funcion"] = self.tipos.get(o.get("tipo", o["clave"]), {}).get("funcion", "otra")
+        sur = float(cfg.get("ciudad", {}).get("lat", T.MALAGA[0])) < 0
         self.plan = Plan(self.semilla, self.fundacion, self.salas_cfg, obras=obras,
-                         entrada=int(nido.get("entrada", 20)))
+                         entrada=int(nido.get("entrada", 20)), sur=sur)
         self.avisos.extend(self.plan.avisos)
         self.construir()
 
@@ -127,7 +128,8 @@ class Mundo:
 
     def _tiempo_real(self):
         """El tiempo de OpenWeather, sólo si el reloj va en hora (no en demo ni en otra fecha)."""
-        if abs((self.ahora - datetime.datetime.now()).total_seconds()) > 300:
+        zona = self.cfg.get("ciudad", {}).get("zona_horaria")
+        if abs((self.ahora - T.ahora(zona)).total_seconds()) > 300:
             return None
         if self.clima is False:
             self.clima = CR.desde_config(self.cfg, self.raiz)
@@ -172,6 +174,10 @@ class Mundo:
         self.nevado = self.nieve or bool(real and self.clima.nevo_hace(24) and self.tiempo_hoy.temp < 5)
         self.temperatura = self.tiempo_hoy.temperatura(mins)
         self.estacion = T.estacion(hoy, sur=lat < 0)
+        # la naturaleza (flores, hojas y frutos, bichos) va con las estaciones: en el hemisferio
+        # sur, con el calendario desplazado medio año
+        natural = hoy + datetime.timedelta(days=182) if lat < 0 else hoy
+        self.dia_natural, self.mes_natural = natural.timetuple().tm_yday, natural.month
         if forzar or int(self.t) % 30 == 0:
             if real:
                 self.llovio = self.clima.llovio_hace(8)

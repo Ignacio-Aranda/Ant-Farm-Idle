@@ -35,13 +35,19 @@ class PantallaNula:
         pass
 
 
+def tus_datos(nombre):
+    """local/<nombre> si existe (tus datos, fuera de git); si no, el de ejemplo del repositorio."""
+    propio = os.path.join(RAIZ, "local", nombre)
+    return propio if os.path.exists(propio) else os.path.join(RAIZ, nombre)
+
+
 def argumentos(argv=None):
     p = argparse.ArgumentParser(prog="hormiguero_pixel", description="Ant Farm Idle (pixel art).")
-    p.add_argument("-c", "--config", default=os.path.join(RAIZ, "config.toml"))
-    p.add_argument("--salas", default=os.path.join(RAIZ, "salas"))
-    p.add_argument("--tipos", default=os.path.join(RAIZ, "tipos"))
-    p.add_argument("--idos", default=os.path.join(RAIZ, "idos.toml"))
-    p.add_argument("--calendario", default=os.path.join(RAIZ, "calendario.toml"))
+    p.add_argument("-c", "--config", default=tus_datos("config.toml"))
+    p.add_argument("--salas", default=tus_datos("salas"))
+    p.add_argument("--tipos", default=tus_datos("tipos"))
+    p.add_argument("--idos", default=tus_datos("idos.toml"))
+    p.add_argument("--calendario", default=tus_datos("calendario.toml"))
     p.add_argument("--fecha")
     p.add_argument("--hora")
     p.add_argument("--dias", type=float)

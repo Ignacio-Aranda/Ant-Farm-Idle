@@ -363,7 +363,7 @@ class Superficie:
         self.bichos = [b for b in self.bichos if b.vivo]
 
         # hojas de otoño cayendo del almendro
-        dia_año = m.ahora.timetuple().tm_yday
+        dia_año = m.dia_natural
         if self.arbol_x is not None and 274 <= dia_año <= 335 and rng.random() < dt * 0.4:
             self.particulas.append([self.arbol_x + rng.uniform(-8, 8), m.suelo_y - 7, rng.uniform(-1, 1),
                                     1.5, rng.choice("',`"), color(rng.choice(["o", "y", "n"])), 8])
@@ -401,7 +401,7 @@ class Superficie:
         m, rng = self.m, self.rng
         W = m.ancho
         hay = {getattr(b, "tipo", "") for b in self.bichos}
-        mes = m.ahora.month
+        mes = m.mes_natural
         hora = m.ahora.hour + m.ahora.minute / 60
         a, p = m.sol_hoy
         crepusculo = abs(hora * 60 - a) < 90 or abs(hora * 60 - p) < 90
