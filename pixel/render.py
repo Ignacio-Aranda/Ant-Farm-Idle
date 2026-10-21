@@ -1090,7 +1090,7 @@ class Render:
                     pygame.draw.line(dst, (90, 80, 70), (x, y), (x + 8, y2))
         if "pi" in deco:
             t2 = self.letras.texto("π = 3,14159265...", (255, 230, 120), 11)
-            dst.blit(t2, (self.W // 2 - t2.get_width() // 2, 60))
+            dst.blit(t2, (self.W // 2 - t2.get_width() // 2, 88 if m.cumples else 60))
 
     # ---------------------------------------------------------------- lluvia y partículas
 

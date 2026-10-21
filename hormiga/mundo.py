@@ -168,7 +168,9 @@ class Mundo:
         presentes = [p for p in self.personas
                      if (not p["alta"] or p["alta"] <= hoy) and p["nombre"].lower() not in nombres_idos]
         self.cumples = [p["nombre"] for p in presentes if F.es_cumple(p, hoy)]
-        self.x_cumple = self.plan.entrada + 42
+        # la tarta va junto a la entrada, en el lado donde quepa (con los regalos ocupa ~20 columnas)
+        e = self.plan.entrada
+        self.x_cumple = e + 30 if e + 30 + 20 <= ANCHO - 3 else max(3, e - 50)
         vivos = {p["nombre"] for p in presentes}
         for n in list(self.hormigas):
             if n not in vivos:
