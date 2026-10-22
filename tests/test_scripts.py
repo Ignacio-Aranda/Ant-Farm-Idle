@@ -455,7 +455,6 @@ class PruebaEnPantalla(unittest.TestCase):
 # --- Repositorio limpio ----------------------------------------------------------------------
 
 class PruebaRepositorio(unittest.TestCase):
-
     def test_gitignore_ignora_local_y_pycache(self):
         reglas = {l.strip() for l in leer(".gitignore").splitlines()}
         self.assertTrue(reglas & {"local/", "/local/", "local", "/local"}, reglas)

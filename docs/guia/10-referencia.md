@@ -128,7 +128,7 @@ y medir lo que tarda cada fotograma.
 | Opción | Qué hace | Por defecto |
 |---|---|---|
 | `--captura FICHERO.png` | Simula un rato y guarda una imagen de 1280x1024. Escribe en la terminal todos los avisos, uno por línea, empezando por `aviso:`. | — |
-| `--medir` | Simula un rato dibujando todos los fotogramas y escribe lo que tarda de media cada uno (simulación y dibujo) y la memoria máxima. También escribe los avisos. | — |
+| `--medir` | Simula un rato dibujando todos los fotogramas y escribe lo que tarda de media cada uno (simulación y dibujo) y la memoria máxima (en Windows no se puede saber y no sale). También escribe los avisos. | — |
 | `--segundos N` | Con `--captura` y `--medir`: cuántos segundos del hormiguero se simulan. Se multiplican por `--acelerar`. | `10` |
 
 - Con `--captura` y `--medir` no se toca `local/estado.json`.
@@ -202,14 +202,15 @@ fichero `local/entorno`, una por línea:
 OPENWEATHER_API_KEY=tu_clave
 ```
 
-Solo lo lee el servicio, al arrancar: lo que lanzas con `en-pantalla.sh` no lo ve.
+Lo leen el servicio, al arrancar, y lo que lanzas con `en-pantalla.sh`. Lo que arrancas
+tú directamente en una terminal no lo ve: ahí vale `export NOMBRE=valor`.
 
 ### Otros programas
 
 | Programa | Qué hace |
 |---|---|
 | `instalar-pi.sh` | En la Pi: instala pygame y la fuente DejaVu, crea el servicio `hormiguero` y deja la pantalla siempre encendida. No tiene opciones y se puede ejecutar todas las veces que quieras. Ver el [capítulo 1](01-instalacion.md). |
-| `en-pantalla.sh PROGRAMA [OPCIONES]` | En la Pi: para el hormiguero, lanza el programa en la pantalla de la Pi y, al terminar (o con `Ctrl+C`, o si se corta el SSH), vuelve a lanzar el hormiguero. Lo que escribe el programa se guarda en `/tmp/en-pantalla.log` y se enseña al final. El programa se ejecuta en la carpeta del hormiguero. |
+| `en-pantalla.sh PROGRAMA [OPCIONES]` | En la Pi: para el hormiguero, lanza el programa en la pantalla de la Pi y, al terminar (o con `Ctrl+C`, o si se corta el SSH), vuelve a lanzar el hormiguero. Lo que escribe el programa se guarda en `/tmp/en-pantalla.log` y se enseña al final. El programa se ejecuta en la carpeta del hormiguero y, como el servicio, con las variables de `local/entorno`. |
 | `herramientas/galeria.py` | Vuelve a hacer las imágenes de `docs/` (`galeria-muebles.png`, `galeria-tipos.png` y `galeria-paisaje.png`). No tiene opciones, no abre ventana y usa los ficheros de ejemplo, no los de `local/`. |
 
 ---
@@ -434,7 +435,7 @@ obras = ["despensa", "museo", "hongos", "almacen", "biblioteca"]
 |---|---|---|---|
 | `montes` | `true` o `false` | `true` | Los montes azulados del fondo. Con `false` solo quedan las colinas verdes de delante. |
 | `costa` | `true` o `false` | `true` | Gaviotas que cruzan el cielo los días claros. |
-| `cementerio` | Número de 0 a 100 | `74` | Dónde empieza el cementerio, en % del ancho. Nunca se pone encima de una salida: si no cabe ahí, va lo más cerca posible. |
+| `cementerio` | Número de 0 a 100 | `74` | Dónde empieza el cementerio, en % del ancho. Va lo más cerca posible de ahí: nunca encima de una salida y, si hay algún hueco donde quepa, sin tapar las piezas de `[[paisaje.suelo]]` (si hace falta, con los nombres más pequeños o en dos filas). |
 
 Lo que se pone en la superficie va en bloques `[[paisaje.suelo]]`, y lo del fondo, sobre
 los montes, en bloques `[[paisaje.fondo]]`. Cada bloque tiene:
@@ -677,7 +678,7 @@ Si alguno no existe, sale un aviso y se usa el de por defecto.
 | `comedor` | Van a desayunar y a comer (según `[horario]`) y se refugian aquí cuando hay peligro fuera. Si una hormiga no tiene sala, este es su sitio. Lleva los mismos adornos de más que `trabajo`. |
 | `agua` | Van a beber de vez en cuando (más a menudo que a otras salas). |
 | `despensa` | Aquí guardan la comida que traen de fuera. Si no hay despensa, la llevan al comedor y, si tampoco hay, a la primera sala. |
-| `museo` | Igual que `otra`. Los hallazgos los enseña la pieza `vitrina`, en la sala que esté. |
+| `museo` | Igual que `otra`. Los hallazgos no los enseña la función, sino la pieza `vitrina`, en la sala que esté (el tipo `museo` trae dos). |
 | `otra` | Solo decorativa: la visitan de vez en cuando. |
 
 Si hay varias salas con función `comedor` o `despensa`, para refugiarse y para guardar la
@@ -739,7 +740,7 @@ ancho de la sala va, así que cualquier hueco vale para cualquier pieza.
 | `cuadro` | Pared | `pared` | 6 | |
 | `pantalla` | Pared | `pared` | 13 | Pantalla con gráficas. |
 | `pizarra` | Pared | `pared` | 11 | |
-| `reloj` | Pared | `pared_derecha` | 6 | Marca la hora del hormiguero. |
+| `reloj` | Pared | `pared_derecha` | 6 | Marca la hora del hormiguero: la de verdad o, si la simulas (`--fecha`, `--hora`, `--dias`, `--acelerar` o la demo), la simulada. |
 
 ![Todos los muebles](../galeria-muebles.png)
 
@@ -782,7 +783,7 @@ nombre tal como lo escribas. Paso a paso, en el [capítulo 3](03-salas-y-gente.m
 |---|---|---|---|
 | `nombre` | Texto | Obligatorio | Lo que pone en la lápida. Sin nombre, no se tiene en cuenta (y sale un aviso). |
 | `fecha` | Fecha `"AAAA-MM-DD"` | Ninguna: ya se fue | El día en que se va. Hasta ese día sigue su hormiga; ese día sale su lápida y lo cuenta el diario. |
-| `epitafio` | Texto | `"Gone, but not forgotten"` | Su despedida en el diario el día en que se va: «*nombre* se va del hormiguero. *Epitafio*.». Sin `fecha` no sale. |
+| `epitafio` | Texto | `"Se fue, pero no lo olvidamos"` | Su despedida en el diario el día en que se va: «*nombre* se va del hormiguero. *Epitafio*.». Sin `fecha` no sale. |
 
 - Con una `fecha` futura, deja a la persona en su sala hasta ese día. Si ya no está en
   ninguna, sale un aviso.
@@ -917,7 +918,7 @@ No se sube a git. Ahí van tus datos y lo que el hormiguero guarda solo.
 |---|---|---|
 | `config.toml`, `salas/`, `tipos/`, `idos.toml`, `calendario.toml` | Tú | Tus ficheros, que se usan en lugar de los de ejemplo. |
 | `openweather_clave.txt` | Tú | La clave de OpenWeather. |
-| `entorno` | Tú | Variables para el servicio de la Pi, una por línea (`NOMBRE=valor`). |
+| `entorno` | Tú | Variables para el servicio de la Pi y para `en-pantalla.sh`, una por línea (`NOMBRE=valor`). |
 | `estado.json` | El hormiguero | La fundación y la semilla del primer arranque, el color de cada hormiga, dónde estaba cada una y lo excavado. Se guarda cada minuto y al pararlo. No lo edites. |
 | `openweather.json` | El hormiguero | Los últimos datos de OpenWeather y el historial de los dos últimos años (si llovió, si nevó...), para el diario. |
 

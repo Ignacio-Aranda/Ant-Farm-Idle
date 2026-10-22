@@ -101,8 +101,8 @@ hormigas en las salas de ese tipo:
 | `trabajo` | Nada en lo que hacen las hormigas. En algunas fiestas lleva adornos (abajo). |
 | `reuniones` | Igual que `trabajo`. Las reuniones no dependen de la función: se ponen en el fichero de la sala. |
 | `despacho` | Igual que `trabajo`. Las llamadas al despacho las hace `jefe = true` en el fichero de la sala, sea del tipo que sea. |
-| `museo` | Nada especial. Los hallazgos los enseña la pieza `vitrina`, en la sala que esté. |
-| `otra` | Nada especial. |
+| `museo` | Igual que `otra`. Los hallazgos no los enseña la función, sino la pieza `vitrina`, en la sala que esté (el tipo `museo` trae dos). |
+| `otra` | Nada especial: la visitan de vez en cuando, como a cualquier sala. |
 
 Algunas cosas más:
 
@@ -223,7 +223,7 @@ Los nombres de las piezas van **sin tildes**: `sofa`, `sillon`, `estanteria`.
 | `cuadro` | pared | `pared` | 6 | Un paisaje con marco. |
 | `pantalla` | pared | `pared` | 13 | Una pantalla con gráficas. |
 | `pizarra` | pared | `pared` | 11 | Una pizarra blanca con apuntes. |
-| `reloj` | pared | `pared_derecha` | 6 | Marca la hora del hormiguero. |
+| `reloj` | pared | `pared_derecha` | 6 | Marca la hora del hormiguero: la de verdad o, si la simulas (`--fecha`, `--hora`, `--dias`, `--acelerar` o la demo), la simulada. |
 
 **Columnas** es lo que tiene que medir la sala, como poco (su `ancho`), para que la pieza
 se pinte. Mira [Si un mueble no cabe](#si-un-mueble-no-cabe).

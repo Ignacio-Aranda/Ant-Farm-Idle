@@ -13,6 +13,7 @@ import sys
 import time
 
 os.environ["SDL_VIDEODRIVER"] = "dummy"   # pygame dibuja en memoria; aquí lo copiamos a la pantalla
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")   # sin el saludo de pygame al arrancar
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import pygame  # noqa: E402
@@ -80,6 +81,9 @@ def modo_grafico_consola():
 
 
 def main():
+    if any(a in ("-h", "--help") for a in sys.argv[1:]):   # la ayuda, sin necesitar el framebuffer
+        from pixel.app import argumentos
+        argumentos()
     fb = Framebuffer(os.environ.get("HORMIGUERO_FB", "/dev/fb0"))
     print("framebuffer %dx%d" % (fb.ancho, fb.alto), flush=True)
     modo_grafico_consola()

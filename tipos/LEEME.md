@@ -21,13 +21,13 @@ aviso en la franja amarilla de la pantalla y se usa el valor por defecto (`otra`
 
 | funcion | Qué pasa |
 |---|---|
-| `trabajo` | Sala de trabajo: las hormigas de la sala pasan aquí la mayor parte del tiempo. |
-| `reuniones` | Sala de reuniones (las reuniones se ponen en el fichero de la sala). |
-| `despacho` | Despacho. Si la sala tiene `jefe = true`, llama a gente de vez en cuando. |
+| `trabajo` | Sala de trabajo, con adornos de más en algunas fiestas. No cambia lo que hacen las hormigas: como en cualquier sala, su gente pasa aquí la mayor parte del tiempo. |
+| `reuniones` | Sala de reuniones, con los mismos adornos que `trabajo` (las reuniones se ponen con `[[reunion]]` en el fichero de la sala). |
+| `despacho` | Despacho, con los mismos adornos que `trabajo` (las llamadas al despacho las hace `jefe = true` en el fichero de la sala, sea del tipo que sea). |
 | `comedor` | Van a desayunar y a comer (ver `[horario]` en `config.toml`) y se refugian aquí. |
 | `agua` | Van a beber de vez en cuando. |
 | `despensa` | Aquí guardan la comida que traen de fuera (si no hay despensa, la llevan al comedor o, si tampoco hay, a la primera sala). |
-| `museo` | Expone los objetos que encuentran al excavar. |
+| `museo` | Igual que `otra`. Los hallazgos no los enseña la función, sino la pieza `vitrina`, en la sala que esté (el tipo `museo` trae dos). |
 | `otra` | Sólo decorativa: la visitan de vez en cuando. |
 
 ## Huecos
@@ -66,6 +66,6 @@ Las imágenes se generan con `python3 herramientas/galeria.py`.
 | `cuadro` | pared | |
 | `pantalla` | pared | Pantalla con gráficas. |
 | `pizarra` | pared | |
-| `reloj` | pared | Marca la hora de verdad. |
+| `reloj` | pared | Marca la hora del hormiguero (la de verdad o, si la simulas con `--fecha`, `--hora`, `--dias`, `--acelerar` o la demo, la simulada). |
 
 Los tipos se leen al arrancar: si cambias uno, reinicia el hormiguero.

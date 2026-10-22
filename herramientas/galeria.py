@@ -12,6 +12,7 @@ import os
 import sys
 
 os.environ["SDL_VIDEODRIVER"] = "dummy"
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")   # sin el saludo de pygame
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
 

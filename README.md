@@ -20,12 +20,24 @@ dejarlo siempre puesto en una Raspberry Pi, paso a paso y sin dar nada por sabid
 ## Probarlo
 
 Hace falta Python 3.11 o más nuevo y pygame (pygame aún no tiene paquetes para la 3.14:
-con la 3.13 va bien). Paso a paso, en el [capítulo 1 de la guía](docs/guia/01-instalacion.md).
+con la 3.13 va bien). Para instalar pygame:
 
 ```bash
-pip install pygame
-python3 hormiguero_pixel.py --ventana
+# Debian, Ubuntu y Raspberry Pi OS (ahí pip da el error externally-managed-environment)
+sudo apt install python3-pygame fonts-dejavu-core
+# macOS y otros sistemas
+python3 -m pip install pygame
+# Windows
+py -m pip install pygame
 ```
+
+Y arráncalo desde la carpeta del repositorio:
+
+```bash
+python3 hormiguero_pixel.py --ventana     # en Windows: py hormiguero_pixel.py --ventana
+```
+
+Paso a paso, y qué hacer si algo falla, en el [capítulo 1 de la guía](docs/guia/01-instalacion.md).
 
 | Opción | |
 |---|---|
@@ -91,7 +103,7 @@ sitio = "centro_derecha"
 ```
 
 Hay escritorios, mesas, nevera, cafetera, fuente de agua, estanterías, vitrina con los
-hallazgos de la colonia, pizarra, un reloj que marca la hora de verdad, sofá, plantas
+hallazgos de la colonia, pizarra, un reloj que marca la hora del hormiguero, sofá, plantas
 que crecen con los días... La lista completa está en [tipos/LEEME.md](tipos/LEEME.md).
 
 ![Todos los muebles](docs/galeria-muebles.png)
@@ -107,8 +119,8 @@ quedan sin hacer y lo cuenta el diario.
 
 En `config.toml` se elige lo que hay arriba y dónde (en % del ancho de la pantalla):
 árboles, chumberas, farolas, bancos y casas en la superficie; catedral, ciudad, faro,
-molino, torre o castillo al fondo. De noche se encienden las ventanas y las farolas,
-el faro barre el cielo y el molino gira.
+molino, torre o castillo al fondo. De noche se encienden las ventanas y las farolas y el
+haz del faro barre el cielo; las aspas del molino giran siempre.
 
 ![Todas las piezas del paisaje, de día y de noche](docs/galeria-paisaje.png)
 
@@ -138,8 +150,8 @@ mkdir -p local && echo tu_clave > local/openweather_clave.txt
 
 Para probar en el ordenador también vale `export OPENWEATHER_API_KEY=tu_clave`, pero el
 servicio de la Pi no ve las variables de tu sesión: allí usa el fichero, o pon la línea
-`OPENWEATHER_API_KEY=tu_clave` en `local/entorno`, que el servicio lee al arrancar (si lo
-instalaste antes de que existiera esta opción, vuelve a ejecutar `instalar-pi.sh`).
+`OPENWEATHER_API_KEY=tu_clave` en `local/entorno`, que leen el servicio (al arrancar) y
+`en-pantalla.sh` (si lo instalaste antes de que existiera esta opción, vuelve a ejecutar `instalar-pi.sh`).
 Sin clave, o si se va internet, el tiempo sale de un modelo estadístico.
 
 Cuando nieva, la nieve se queda encima de los árboles, los tejados, las lápidas y el
@@ -240,6 +252,21 @@ Tardan alrededor de un minuto. GitHub las pasa solas en cada cambio, con Python 
 **Galerías.** Las imágenes de muebles, tipos de sala y paisaje de `docs/` se regeneran con
 `python3 herramientas/galeria.py` (por ejemplo, después de añadir una pieza nueva). Usa
 siempre los ficheros de ejemplo del repositorio (no los de `local/`) y no escribe en `local/`.
+
+**Capturas del README.** `docs/dia.png` y `docs/noche.png` se hacen con los ficheros de
+ejemplo y una copia de `config.toml` con la fundación y la semilla puestas (`--captura` no
+escribe en `local/`):
+
+```bash
+sed -e 's/^# fundacion = /fundacion = /' -e 's/^# semilla = /semilla = /' config.toml > /tmp/capturas.toml
+python3 hormiguero_pixel.py -c /tmp/capturas.toml --salas salas --tipos tipos --idos idos.toml \
+    --calendario calendario.toml --segundos 30 --fecha 2026-10-27 --hora 11:00 --captura docs/dia.png
+python3 hormiguero_pixel.py -c /tmp/capturas.toml --salas salas --tipos tipos --idos idos.toml \
+    --calendario calendario.toml --segundos 30 --fecha 2026-12-24 --hora 22:00 --captura docs/noche.png
+```
+
+Las nubes, los pájaros y lo que hacen las hormigas cambian un poco de una vez a otra: si
+algo queda feo (una nube encima de la fecha, un nombre encima de otro), repítelo.
 
 ## Licencia
 

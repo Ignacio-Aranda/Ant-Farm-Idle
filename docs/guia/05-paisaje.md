@@ -247,14 +247,19 @@ como la `x` de las piezas. Lo normal es que salga ahí, pero:
 - **Nunca se pone encima de una entrada del hormiguero.** Si en ese sitio hay una, se va
   al hueco libre más cercano. Por eso a veces sale un poco más a la izquierda o a la
   derecha de lo que pusiste.
+- **Si puede, no tapa las piezas de la superficie** (los árboles, las casas, los bancos,
+  las farolas...). Si donde lo pones tapa alguna, se va al hueco más cercano donde quepa sin
+  tapar nada, aunque para eso tenga que escribir los nombres más pequeños o ponerlos en dos
+  filas. Si no hay ningún hueco así, se queda lo más cerca posible de donde lo pones (nunca
+  encima de una entrada), aunque tape alguna pieza.
 - **No se sale por la derecha.** Si desde ahí no cabe entero, se corre a la izquierda lo
   que haga falta (con `cementerio = 100` empieza bastante antes del borde).
 - **Si no caben todas las lápidas**, primero se escriben los nombres con letra más
   pequeña y luego se ponen en dos filas. Si aun así no caben, se quedan fuera los
   primeros de `idos.toml` y sale un aviso con sus nombres.
 
-Como los montículos de las entradas, el cementerio se pinta encima de las piezas de la
-superficie: si tapa alguna, mueve la pieza o el cementerio.
+Cuando no le queda más remedio que tapar una pieza, el cementerio se pinta encima de ella:
+mueve la pieza o el cementerio, o deja más sitio libre en la superficie.
 
 Cuando nieva, también se cubren de nieve las lápidas. Además, el cementerio tiene sus
 días especiales: flores en Todos los Santos, si tu calendario trae esa fiesta (el de

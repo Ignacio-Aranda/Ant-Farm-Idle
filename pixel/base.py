@@ -9,7 +9,7 @@ from motor import fuente
 
 CLAVE = (255, 0, 255)  # color transparente de los sprites (más rápido que el canal alfa)
 
-# Medidas: la simulación trabaja en "celdas" (como la versión de terminal);
+# Medidas: la simulación trabaja en "celdas" (una rejilla de 160 columnas);
 # cada celda son 4x8 píxeles de la imagen interna de 640x512.
 CW, CH = 4, 8
 ANCHO_PX, ALTO_PX = 640, 512
@@ -195,7 +195,7 @@ class Letras:
 
 
 def reloj_grande(texto, color, bloque=3):
-    """Hora en grande con la fuente de bloques de la versión de terminal."""
+    """Hora en grande con la fuente de bloques (motor/fuente.py)."""
     filas = fuente.renderizar(texto, "#", 1)
     w = len(filas[0]) * bloque
     s = pygame.Surface((w + 2, len(filas) * bloque + 2), pygame.SRCALPHA)

@@ -5,6 +5,7 @@ Teclas: q/Esc salir · f pantalla completa · i rendimiento."""
 import os
 import sys
 
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")   # sin el saludo de pygame al arrancar
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from pixel.app import main  # noqa: E402

@@ -159,6 +159,18 @@ def iniciar_pygame():
     pygame.font.init()
 
 
+def memoria_maxima_mb():
+    """La memoria máxima que ha usado el proceso, en MB, o None si no se puede saber (el módulo
+    resource sólo existe en Linux y macOS: en Windows no se enseña)."""
+    try:
+        import resource
+    except ImportError:
+        return None
+    maximo = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    # en macOS viene en bytes; en Linux, en KB
+    return maximo / (1024 * 1024) if sys.platform == "darwin" else maximo / 1024
+
+
 def sin_pantalla(args):
     os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
     import pygame
@@ -174,7 +186,6 @@ def sin_pantalla(args):
     r = Render(m, pantalla)
     pasos = int(args.segundos * fps)
     t_sim = t_dib = 0.0
-    import resource
     for i in range(pasos):
         simulado[0] += datetime.timedelta(seconds=args.acelerar / fps)
         t0 = time.perf_counter()
@@ -188,7 +199,9 @@ def sin_pantalla(args):
     if args.medir:
         print("simulación %.2f ms · dibujo %.2f ms por fotograma (%d fotogramas)"
               % (t_sim / pasos * 1000, t_dib / pasos * 1000, pasos))
-        print("memoria máxima: %.1f MB" % (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024))
+        mb = memoria_maxima_mb()
+        if mb is not None:
+            print("memoria máxima: %.1f MB" % mb)
     if args.captura:
         grande = pygame.transform.scale(pantalla, (1280, 1024))
         pygame.image.save(grande, args.captura)

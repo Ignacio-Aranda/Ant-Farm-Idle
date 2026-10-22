@@ -617,7 +617,7 @@ class CumpleanosYDiario(Comprobaciones):
         self.assertIn(aviso, m.todos_los_avisos())
         h.ir_a(datetime.datetime(2026, 12, 2, 12, 0))   # ya pasó su fecha: el aviso se va solo
         self.assertNotIn(aviso, m.todos_los_avisos())
-        self.assertIn((k(datetime.date(2026, 12, 1)), "Futuro se va del hormiguero. Gone, but not forgotten."),
+        self.assertIn((k(datetime.date(2026, 12, 1)), "Futuro se va del hormiguero. Se fue, pero no lo olvidamos."),
                       self.comprobar_diario(m))
 
     def test_epitafios(self):
@@ -632,9 +632,9 @@ class CumpleanosYDiario(Comprobaciones):
         self.assertEqual(h.m.hormigas, {})
         diario = self.comprobar_diario(h.m)
         esperadas = [(40, "Lola se va del hormiguero. ¡Hasta pronto!"),
-                     (41, "Max se va del hormiguero. Gone, but not forgotten."),
+                     (41, "Max se va del hormiguero. Se fue, pero no lo olvidamos."),
                      (42, "Leo se va del hormiguero. «Adiós»"),
-                     (43, "Eva se va del hormiguero. Gone, but not forgotten."),
+                     (43, "Eva se va del hormiguero. Se fue, pero no lo olvidamos."),
                      (44, "Bea se va del hormiguero. Se fue a otra colonia."),
                      (45, "Teo se va del hormiguero. ¿Volverá?")]
         self.assertEqual([e for e in diario if "se va del hormiguero" in e[1]], esperadas)

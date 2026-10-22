@@ -489,7 +489,7 @@ class Mundo:
         for d in self.idos_cfg:
             if d["fecha"] == f:
                 # la despedida: su epitafio de idos.toml, si lo tiene
-                adios = str(d.get("epitafio") or "").strip() or "Gone, but not forgotten"
+                adios = str(d.get("epitafio") or "").strip() or "Se fue, pero no lo olvidamos"
                 j = next((j for j, c in enumerate(adios) if c.isalpha()), 0)   # tras «¡», «¿»...
                 adios = adios[:j] + adios[j:j + 1].upper() + adios[j + 1:]
                 adios += "" if adios[-1] in ".!?…»\"" else "."

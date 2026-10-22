@@ -303,8 +303,8 @@ compartes, cualquiera puede ver tu clave y usarla. Si la quieres ahí, que sea e
 `local/config.toml`.
 
 **En la Pi, el servicio no ve las variables** que pones con `export`: allí usa el fichero
-del paso 4. Otra opción en la Pi es el fichero `local/entorno`, que el servicio lee al
-arrancar. Asegúrate de que existe la carpeta `local`:
+del paso 4. Otra opción en la Pi es el fichero `local/entorno`, que leen el servicio, al
+arrancar, y `en-pantalla.sh`. Asegúrate de que existe la carpeta `local`:
 
 ```bash
 mkdir -p ~/Ant-Farm-Idle/local

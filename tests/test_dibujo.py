@@ -804,6 +804,84 @@ class TestPiezas(unittest.TestCase):
         self.assertIn("paisaje: no existe la pieza de fondo «piramide»", avisos)
         self.assertTrue(any(a.startswith("paisaje: pieza mal escrita") for a in avisos))
 
+    def test_lo_que_ocupa_cada_pieza_del_paisaje(self):
+        """PA.ANCHO_SUELO (lo que el cementerio procura no tapar) abarca todo lo que se pinta."""
+        self.assertEqual(set(PA.ANCHO_SUELO), set(PA.SUELO))
+        for nombre, (pintar, luces, _arbol) in PA.SUELO.items():
+            izq, der = PA.ANCHO_SUELO[nombre]
+            for dia in range(1, 367, 30):
+                for semilla, indice in ((2026, 0), (7, 1), (99, 2)):
+                    with self.subTest(suelo=nombre, dia=dia, semilla=semilla, indice=indice):
+                        s = superficie(160, 90)
+                        pintar(s, 80, 80, PA.Contexto(dia, semilla, False, indice))
+                        if luces:
+                            luces(s, 80, 80, PA.Contexto(dia, semilla, True, indice))
+                        caja = pintado(s, CLAVE)
+                        self.assertGreaterEqual(caja.left, 80 - izq)
+                        self.assertLessEqual(caja.right - 1, 80 + der)
+
+    def test_el_cementerio_no_tapa_el_paisaje_si_puede(self):
+        """Con casas, un pino, un banco, una farola y un olivo, el cementerio busca un hueco donde no
+        tape ninguna pieza (con letra más pequeña o en dos filas, si hace falta). Si no lo hay, se
+        pone lo más cerca posible aunque tape alguna. Nunca, encima de una salida."""
+        piezas = (("casa", 8), ("pino", 21), ("banco", 33), ("farola", 38), ("casa", 50), ("olivo", 93))
+        paisaje = {"montes": True, "costa": False, "cementerio": 62,
+                   "suelo": [{"pieza": p, "x": x} for p, x in piezas], "fondo": []}
+        nombres = ["CARLOS", "ROSA", "MAXIMILIANO", "BEA", "WENCESLAO", "TERESA", "JUAN", "ROCÍO",
+                   "PACO", "MARÍA JOSÉ"]
+        for n in (1, 2, 5, 10):
+            with self.subTest(idos=n):
+                e = Escena(FECHA_BASE, paisaje=paisaje, idos=[{"nombre": x} for x in nombres[:n]])
+                e.fotogramas(1)
+                self.assertFalse([a for a in e.m.todos_los_avisos() if "no caben" in a])
+                a, b = e.r.cementerio_px
+                tapadas = [p for p, x in e.m.superficie.piezas_suelo
+                           if a < e.r.px(x) + PA.ANCHO_SUELO[p][1] and e.r.px(x) - PA.ANCHO_SUELO[p][0] < b]
+                if n <= 5:
+                    self.assertEqual(tapadas, [])
+                else:   # diez nombres no caben en ningún hueco libre: tapa alguna, como antes
+                    self.assertTrue(tapadas)
+                x0, x1 = e.m.zona_cementerio
+                for sx in e.m.salidas_x_grid:
+                    self.assertTrue(x1 <= sx - 9 or x0 >= sx + 9, (x0, x1, sx))
+
+    def test_el_haz_del_faro(self):
+        """De noche, el haz es luz cálida que se abre desde la lámpara y se va apagando hacia la
+        punta; gira (hacia la derecha, hacia aquí y hacia la izquierda). De día no hay haz."""
+        cielo = (20, 24, 60)
+        cx, base = 150, 70
+        ly = base - 43   # la lámpara
+
+        def faro(noche, t):
+            s = pygame.Surface((300, 90))
+            s.fill(cielo)
+            PA.faro_vivo(s, cx, base, PA.Contexto(0, 2026, noche, 0), t)
+            return s
+
+        def luz(s, x, y):
+            return sum(s.get_at((x, y))[:3]) - sum(cielo)
+
+        def alto(s, x):   # cuántos píxeles de esa columna tienen luz
+            return sum(1 for y in range(s.get_height()) if luz(s, x, y) > 0)
+
+        dia = faro(False, 0.0)
+        self.assertEqual({tuple(dia.get_at((x, y)))[:3] for x in range(0, 300, 7) for y in range(0, 90, 5)},
+                         {cielo})
+        derecha = faro(True, 0.0)   # de lado, hacia la derecha: entero
+        cerca, medio, lejos = (luz(derecha, cx + d, ly) for d in (20, 60, 110))
+        self.assertGreater(cerca, medio)
+        self.assertGreater(medio, lejos)
+        self.assertGreater(lejos, 0)
+        r, g, b = derecha.get_at((cx + 20, ly))[:3]
+        self.assertGreater(r - cielo[0], b - cielo[2])   # cálida: más rojo y amarillo que azul
+        self.assertGreater(alto(derecha, cx + 100), alto(derecha, cx + 20))   # se abre
+        self.assertEqual(luz(derecha, cx - 40, ly), 0)
+        izquierda = faro(True, math.pi / 0.9)
+        self.assertGreater(luz(izquierda, cx - 60, ly), 0)
+        self.assertEqual(luz(izquierda, cx + 40, ly), 0)
+        de_frente = faro(True, (math.pi / 2) / 0.9)   # apunta hacia aquí: la lámpara deslumbra
+        self.assertGreater(luz(de_frente, cx - 5, ly - 5), luz(derecha, cx - 5, ly - 5))
+
 
 # ===================================================================== textos
 
@@ -897,7 +975,30 @@ class TestCapturas(ConTemporal):
             APP.main(self.argumentos("--medir"))
         texto = salida.getvalue()
         self.assertRegex(texto, r"simulación [\d.]+ ms · dibujo [\d.]+ ms por fotograma \(10 fotogramas\)")
-        self.assertRegex(texto, r"memoria máxima: [\d.]+ MB")
+        if APP.memoria_maxima_mb() is not None:   # en Windows no se sabe
+            self.assertRegex(texto, r"memoria máxima: [\d.]+ MB")
+
+    def test_medir_y_captura_sin_el_modulo_resource(self):
+        """En Windows no existe el módulo resource: --medir y --captura van igual, sin la memoria."""
+        salida = io.StringIO()
+        with mock.patch.dict(sys.modules, {"resource": None}), contextlib.redirect_stdout(salida):
+            self.assertIsNone(APP.memoria_maxima_mb())
+            APP.main(self.argumentos("--medir"))
+            APP.main(self.argumentos("--captura", os.path.join(self.tmp, "sin-resource.png")))
+        texto = salida.getvalue()
+        self.assertRegex(texto, r"simulación [\d.]+ ms · dibujo [\d.]+ ms por fotograma")
+        self.assertIn("captura guardada en", texto)
+        self.assertNotIn("memoria", texto)
+
+    def test_memoria_en_linux_y_en_macos(self):
+        """ru_maxrss viene en KB en Linux y en bytes en macOS: en los dos, 50 MB son 50 MB."""
+        for plataforma, maximo in (("linux", 50 * 1024), ("darwin", 50 * 1024 * 1024)):
+            with self.subTest(plataforma=plataforma):
+                falso = types.SimpleNamespace(
+                    RUSAGE_SELF=0, getrusage=lambda quien, m=maximo: types.SimpleNamespace(ru_maxrss=m))
+                with mock.patch.dict(sys.modules, {"resource": falso}), \
+                        mock.patch.object(sys, "platform", plataforma):
+                    self.assertAlmostEqual(APP.memoria_maxima_mb(), 50.0)
 
 
 # ===================================================================== framebuffer (hormiguero_fb.py)

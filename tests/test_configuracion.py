@@ -999,7 +999,7 @@ class Idos(Base):
         self.escribir("idos.toml", """\
             [[ido]]
             nombre = "  Carlos  "
-            epitafio = "gone, but not forgotten"
+            epitafio = "se fue, pero no lo olvidamos"
 
             [[ido]]
             nombre = "Irene"
@@ -1007,7 +1007,7 @@ class Idos(Base):
             """)
         _cfg, _s, idos, _f = self.cargar()
         self.assertSinAvisos()
-        self.assertEqual(idos, [{"nombre": "Carlos", "epitafio": "gone, but not forgotten"},
+        self.assertEqual(idos, [{"nombre": "Carlos", "epitafio": "se fue, pero no lo olvidamos"},
                                 {"nombre": "Irene", "fecha": "2026-09-30"}])
 
     def test_tabla_simple_lista_y_texto(self):

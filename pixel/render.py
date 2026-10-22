@@ -1,6 +1,6 @@
 """Dibuja el hormiguero en pixel art a partir del estado de la simulación.
 
-La simulación (hormiga/mundo.py) trabaja en celdas de la versión de terminal;
+La simulación (hormiga/mundo.py) trabaja en celdas (una rejilla de 160 columnas);
 aquí cada celda son 4x8 píxeles de una imagen interna de 640x512, que luego
 se escala x2 a los 1280x1024 del monitor.
 
@@ -532,6 +532,23 @@ class Render:
             x = max(x, sx + 9)
         huecos.append((x, m.plan_ancho - 2))
         mayor = max(b - a for a, b in huecos)
+        # lo que ocupan las piezas del paisaje (en píxeles, con un poco de margen): si se puede,
+        # el cementerio no tapa ninguna
+        piezas = []
+        for pieza, px_ in m.superficie.piezas_suelo:
+            if pieza in PA.SUELO:
+                izq, der = PA.ANCHO_SUELO.get(pieza, (0, 0))
+                piezas.append((self.px(px_) - izq - 2, self.px(px_) + der + 2))
+
+        def sitio(total, libre):
+            """La columna (del plano) donde empieza un cementerio de `total` columnas, lo más cerca
+            posible de la que dice config.toml (cementerio_x va en columnas de la pantalla): nunca
+            encima de una salida y, con libre, sin tapar ninguna pieza del paisaje. None si no hay."""
+            pref = min(m.superficie.cementerio_x - m.ox, m.plan_ancho - total - 2)
+            sitios = [x0 for a, b in huecos for x0 in range(a, b - total + 1)
+                      if not libre or not any(self.px(m.ox + x0) < d and c < self.px(m.ox + x0 + total)
+                                              for c, d in piezas)]
+            return min(sitios, key=lambda x0: abs(x0 - pref), default=None)
 
         def medir(nombres, tam, filas):
             """Cada lápida, tan ancha como su nombre (con margen). Con dos filas, las k primeras van
@@ -544,25 +561,33 @@ class Render:
             if filas == 2 and k > 1:
                 k = min(range(1, k), key=lambda i: max(largo(0, i), largo(i, len(anchos))))
             return textos, anchos, k, max(largo(0, k), largo(k, len(anchos))) + 3
-        # en el hueco más grande: si no caben, con letra más pequeña, luego en dos filas y, como
-        # último recurso, sólo las de los últimos que se fueron (con un aviso)
+        tamanos = ((1, 7), (1, 6), (1, 5), (2, 6), (2, 5))
         nombres = list(m.idos)
-        for q in range(len(nombres)):
-            for filas, tam in ((1, 7), (1, 6), (1, 5), (2, 6), (2, 5)):
-                textos, anchos, k, total = medir(nombres[q:], tam, filas)
+        # primero, todas las lápidas en un hueco donde no tapen ninguna pieza del paisaje (con letra
+        # más pequeña o en dos filas, si hace falta)
+        for filas, tam in tamanos:
+            textos, anchos, k, total = medir(nombres, tam, filas)
+            x = sitio(total, True)
+            if x is not None:
+                break
+        else:
+            # si no, aunque tapen alguna: en el hueco más grande entre las salidas, con letra más
+            # pequeña, luego en dos filas y, como último recurso, sólo las de los últimos que se
+            # fueron (con un aviso)
+            for q in range(len(nombres)):
+                for filas, tam in tamanos:
+                    textos, anchos, k, total = medir(nombres[q:], tam, filas)
+                    if total <= mayor:
+                        break
                 if total <= mayor:
                     break
-            if total <= mayor:
-                break
-        fuera = nombres[:q] if total <= mayor else nombres
-        if fuera:
-            m.avisos_dibujo[("cementerio",)] = ["idos.toml: no caben todas las lápidas en el cementerio "
-                                                "(no salen %s)" % ", ".join(fuera)]
-        if total > mayor:
-            return
-        # cementerio_x va en columnas de la pantalla; los huecos, en las del plano
-        pref = min(m.superficie.cementerio_x - m.ox, m.plan_ancho - total - 2)
-        x = min((x0 for a, b in huecos for x0 in range(a, b - total + 1)), key=lambda x0: abs(x0 - pref))
+            fuera = nombres[:q] if total <= mayor else nombres
+            if fuera:
+                m.avisos_dibujo[("cementerio",)] = ["idos.toml: no caben todas las lápidas en el cementerio "
+                                                    "(no salen %s)" % ", ".join(fuera)]
+            if total > mayor:
+                return
+            x = sitio(total, False)
         m.zona_cementerio = (x, x + total)
         x0 = self.px(m.ox + x)
         # valla
@@ -761,7 +786,7 @@ class Render:
                 continue
             x, y = ox + gx * CW, gy * CH + 2
             hueso = (225, 215, 190)
-            if k == 0:  # pez fósil (homenaje a la pecera)
+            if k == 0:  # pez fósil
                 pygame.draw.line(s, hueso, (x, y + 2), (x + 14, y + 2))
                 for i in range(2, 12, 3):
                     pygame.draw.line(s, hueso, (x + i, y), (x + i, y + 4))
@@ -1570,10 +1595,9 @@ def _doble(s):
 
 
 def rgb_desde(c):
-    """motor.colores.Color -> (r,g,b), un poco aclarado para que luzca sobre la tierra."""
+    """motor.colores.Color -> (r,g,b)."""
     from motor.colores import rgb_de_256
-    r = rgb_de_256(c.c256)
-    return r
+    return rgb_de_256(c.c256)
 
 
 def _color_de(c):

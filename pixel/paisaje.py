@@ -12,7 +12,7 @@ import random
 import pygame
 
 from . import arte as A
-from .base import CLAVE, oscuro
+from .base import CLAVE, circulo_luz, oscuro
 
 
 class Contexto:
@@ -209,21 +209,57 @@ def faro(s, cx, base, c, cuerpo, luz):
     pygame.draw.polygon(s, oscuro(cuerpo, 0.6), [(cx - 5, base - 46), (cx + 5, base - 46), (cx, base - 52)])
 
 
+HAZ_LARGO, HAZ_ALTO = 134, 53   # el haz del faro visto de lado, entero (en píxeles)
+_HAZ = {}                       # el haz y el resplandor de la lámpara, ya dibujados
+
+
+def _haz_de_luz():
+    """El haz del faro de lado, hacia la derecha, para sumarlo al cielo (BLEND_ADD: el negro no
+    cambia nada): un triángulo de luz cálida que se abre desde la lámpara, más brillante cerca de
+    ella y en el centro, y que se desvanece hacia la punta y hacia los bordes."""
+    s = pygame.Surface((HAZ_LARGO, HAZ_ALTO), 0, 32)
+    s.fill((0, 0, 0))
+    medio = HAZ_ALTO // 2
+    for x in range(HAZ_LARGO):
+        d = x / (HAZ_LARGO - 1)                     # 0 en la lámpara, 1 en la punta
+        abierto = 1.5 + d * (medio - 1.5)           # medio alto del haz en esta columna
+        fuerza = (1 - d) * (0.55 + 0.45 * min(1.0, x / 6))
+        for y in range(HAZ_ALTO):
+            borde = abs(y - medio) / abierto
+            if borde < 1:
+                f = fuerza * (1 - borde) ** 0.7
+                s.set_at((x, y), (int(215 * f), int(180 * f), int(85 * f)))
+    return s
+
+
 def faro_vivo(dst, cx, base, c, t):
-    """El haz del faro barriendo el cielo (sólo de noche)."""
+    """El haz del faro barriendo el cielo (sólo de noche). Gira: de lado se ve entero, y al
+    apuntar hacia aquí (o hacia el otro lado) se acorta; cuando apunta hacia aquí, la lámpara
+    deslumbra un momento."""
     if not c.noche:
         return
+    if "haz" not in _HAZ:
+        _HAZ["haz"] = _haz_de_luz()
+        _HAZ["brillos"] = [circulo_luz(12, (255, 225, 160), 60 + 30 * k) for k in range(6)]
     ang = t * 0.9
-    largo = 120 * abs(math.cos(ang))
-    lado = 1 if math.sin(ang) > 0 else -1
-    if largo < 8:
-        return
-    haz = pygame.Surface((int(largo), 14))
-    haz.fill((0, 0, 0))
-    pygame.draw.polygon(haz, (70, 62, 30), [(0, 7), (int(largo), 0), (int(largo), 14)])
-    if lado < 0:
-        haz = pygame.transform.flip(haz, True, False)
-    dst.blit(haz, (cx if lado > 0 else cx - int(largo), base - 50), special_flags=pygame.BLEND_ADD)
+    lado = math.cos(ang)            # > 0, hacia la derecha; < 0, hacia la izquierda
+    ly = base - 43                  # la lámpara
+    largo = int(abs(lado) * HAZ_LARGO) // 2 * 2
+    if largo >= 4:
+        clave = (largo, lado < 0)
+        haz = _HAZ.get(clave)
+        if haz is None:
+            haz = pygame.transform.smoothscale(_HAZ["haz"], (largo, HAZ_ALTO))
+            k = min(1.0, 3 * largo / HAZ_LARGO)   # muy corto (casi de frente o de espaldas), más tenue
+            if k < 1:
+                haz.fill((int(255 * k),) * 3, special_flags=pygame.BLEND_MULT)
+            if lado < 0:
+                haz = pygame.transform.flip(haz, True, False)
+            _HAZ[clave] = haz
+        dst.blit(haz, (cx if lado > 0 else cx - largo, ly - HAZ_ALTO // 2), special_flags=pygame.BLEND_ADD)
+    hacia_aqui = max(0.0, math.sin(ang)) ** 4
+    brillo = _HAZ["brillos"][min(5, int(hacia_aqui * 6))]
+    dst.blit(brillo, (cx - 12, ly - 12), special_flags=pygame.BLEND_ADD)
 
 
 def molino(s, cx, base, c, cuerpo, luz):
@@ -272,6 +308,19 @@ SUELO = {
     "farola": (farola, farola_luz, False),
     "banco": (banco, None, False),
     "casa": (casa, casa_luz, False),
+}
+
+# lo que ocupa cada pieza de la superficie a cada lado de su x, en píxeles (con la copa de los
+# árboles y el tejado de la casa): el cementerio busca un sitio donde no tape ninguna
+ANCHO_SUELO = {
+    "chumbera": (12, 12),
+    "almendro": (34, 33),
+    "palmera": (31, 35),
+    "olivo": (25, 24),
+    "pino": (15, 15),
+    "farola": (4, 5),
+    "banco": (12, 11),
+    "casa": (24, 24),
 }
 
 # fondo: nombre -> (pintar, animar o None)

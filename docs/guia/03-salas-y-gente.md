@@ -374,7 +374,7 @@ así que no sale...» y su hormiga tampoco está.
 4. Después, cuando quieras, borra su `[[miembro]]` de la sala.
 
 Del epitafio, el hormiguero pone en mayúscula la primera letra y le añade un punto si no lo
-tiene. Sin epitafio, la despedida es «Gone, but not forgotten.»
+tiene. Sin epitafio, la despedida es «Se fue, pero no lo olvidamos.»
 
 Si lo borras de su sala antes de tiempo, sale el aviso «idos.toml: Bea se va el
 2026-12-18, pero ya no está en ninguna sala; déjalo en la suya hasta ese día».
@@ -389,7 +389,8 @@ Si lo borras de su sala antes de tiempo, sale el aviso «idos.toml: Bea se va el
   encima.
 - Dónde: lo decide `cementerio` en la sección `[paisaje]` de `config.toml`, en % del
   ancho de la pantalla (si no lo cambias, `74`). Se coloca lo más cerca posible de ahí,
-  nunca encima de una salida. Lo cuenta el [capítulo 5](05-paisaje.md).
+  nunca encima de una salida y, si hay sitio, sin tapar los árboles, las casas ni las
+  demás piezas del paisaje. Lo cuenta el [capítulo 5](05-paisaje.md).
 - Si son muchos, las lápidas salen con letra más pequeña, y después en dos filas. Si ni
   así caben, no salen las de los primeros de la lista, con el aviso «idos.toml: no caben
   todas las lápidas en el cementerio (no salen ...)». Los nombres cortos caben mejor.
