@@ -12,12 +12,17 @@ GORROS = ("fiesta", "papa_noel", "corona", "capirote", "bruja", "flor", "antifaz
 
 
 def _fecha(espec, anio):
+    """La fecha de una fiesta ("DD-MM" o "pascua+N") en ese año. Si está mal escrita, también
+    con números enormes, ValueError."""
     espec = str(espec).strip().lower().replace(" ", "")
-    if espec.startswith("pascua"):
-        resto = espec[6:] or "+0"
-        return pascua(anio) + datetime.timedelta(days=int(resto))
-    dia, mes = espec.replace("/", "-").split("-")  # formato español: DD-MM (o DD/MM)
-    return datetime.date(anio, int(mes), int(dia))
+    try:
+        if espec.startswith("pascua"):
+            resto = espec[6:] or "+0"
+            return pascua(anio) + datetime.timedelta(days=int(resto))
+        dia, mes = espec.replace("/", "-").split("-")  # formato español: DD-MM (o DD/MM)
+        return datetime.date(anio, int(mes), int(dia))
+    except OverflowError:
+        raise ValueError("fecha fuera de rango: %s" % espec) from None
 
 
 class Fiesta:
@@ -75,7 +80,7 @@ def cargar(datos, avisos=None):
         for espec in dict.fromkeys((f.desde, f.hasta)):
             try:
                 _fecha(espec, 2028)
-            except (ValueError, OverflowError):   # una fecha mal escrita no tumba el hormiguero
+            except ValueError:   # una fecha mal escrita no tumba el hormiguero
                 mal.append(espec)
         if mal:
             avisos.append("calendario: «%s»: fecha mal escrita (%s), usa DD-MM o pascua+N"
@@ -98,12 +103,14 @@ def activas(fiestas, fecha):
 
 def dia_mes(texto):
     """"DD-MM" (formato español) -> (mes, dia). Acepta también "DD/MM", "DD-MM-AAAA" y
-    "AAAA-MM-DD". Si no es una fecha que exista, ValueError."""
+    "AAAA-MM-DD". Si no es una fecha que exista (también con números enormes), ValueError."""
     p = [int(v) for v in str(texto).strip().replace("/", "-").split("-")]
     if len(p) == 3:
         p = [p[2], p[1]] if p[0] > 31 else p[:2]   # AAAA-MM-DD o DD-MM-AAAA
     a, b = p
     mes, dia = (b, a) if a <= 31 and b <= 12 else (a, b)  # por si alguien lo puso al revés (MM-DD)
+    if not (1 <= mes <= 12 and 1 <= dia <= 31):
+        raise ValueError("no existe el día %s" % texto)
     datetime.date(2028, mes, dia)   # que exista (2028 es bisiesto: vale el 29-02)
     return mes, dia
 

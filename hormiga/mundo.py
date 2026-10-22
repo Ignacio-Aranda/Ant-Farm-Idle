@@ -29,7 +29,9 @@ class Mundo:
         # avisos de los ficheros (se rehacen en cada recarga) y del trazado y el dibujo (se quedan)
         self.avisos_carga = avisos if avisos is not None else []
         self.avisos = []
-        self.avisos_gente = []   # los de idos.toml que dependen del día (se rehacen solos)
+        self.avisos_gente = []   # los de idos.toml y las reuniones, que dependen del día (se rehacen solos)
+        # los del dibujo que se rehacen al repintar: los muebles que no caben y el cementerio
+        self.avisos_dibujo = {}
         self._avisado = set()
         self.raiz = cfg.get("raiz", ".")
         self.clima = False   # se crea al primer uso (y sólo si el reloj va en hora)
@@ -57,7 +59,9 @@ class Mundo:
             obras = [por_clave.get(str(n).lower(), {"clave": str(n).lower(), "nombre": str(n), "ancho": 22})
                      for n in nombres_obras]
         for o in obras:
-            o["funcion"] = self.tipos.get(o.get("tipo", o["clave"]), {}).get("funcion", "otra")
+            tipo = self.tipos.get(o.get("tipo", o["clave"]), {})
+            o["funcion"] = tipo.get("funcion", "otra")
+            o["minimo"] = tipo.get("ancho_minimo", 0)   # lo que necesitan sus muebles (lo pone pixel/app.py)
         sur = float(cfg.get("ciudad", {}).get("lat", T.MALAGA[0])) < 0
         self.plan = Plan(self.semilla, self.fundacion, self.salas_cfg, obras=obras,
                          entrada=int(nido.get("entrada", 20)), sur=sur)
@@ -97,7 +101,8 @@ class Mundo:
 
     def todos_los_avisos(self):
         """Los avisos de los ficheros, los de idos.toml, y los del trazado y el dibujo, sin repetir."""
-        return list(dict.fromkeys(self.avisos_carga + self.avisos + self.avisos_gente))
+        dibujo = [a for avisos in self.avisos_dibujo.values() for a in avisos]
+        return list(dict.fromkeys(self.avisos_carga + self.avisos + self.avisos_gente + dibujo))
 
     # -------------------------------------------------------------- montaje
 
@@ -207,6 +212,7 @@ class Mundo:
                              "déjalo en la suya hasta ese día" % (d["nombre"], d["fecha"].isoformat())
                              for d in self.idos_cfg
                              if d["fecha"] and d["fecha"] > hoy and d["nombre"].lower() not in en_salas]
+        self.avisos_gente += self._sin_convocados(presentes)
         self.cumples = [p["nombre"] for p in presentes if F.es_cumple(p, hoy)]
         # la tarta va junto a la entrada, en el lado donde quepa (con los regalos ocupa ~20 columnas)
         e = self.plan.entrada
@@ -234,6 +240,28 @@ class Mundo:
                 h.persona, h.sala = p, p["sala"]  # la han cambiado de sala
                 if p.get("color"):
                     h.color = color(p["color"])
+
+    def _sin_convocados(self, presentes):
+        """Avisos de las reuniones que hoy no convocan a nadie que esté (una sala sin gente,
+        o gente que ya se fue o que aún no ha llegado): no se hacen."""
+        nombres = {p["nombre"].lower() for p in presentes}
+        salas = {p["sala"] for p in presentes}
+        nombre_sala = {c["clave"]: c["nombre"] for c in self.salas_cfg}
+        out = []
+        for cfg in self.salas_cfg:
+            for r in cfg.get("reuniones", []):
+                quien = r.get("quien", "todos")
+                if isinstance(quien, list):
+                    if any(n.lower() in nombres for n in quien):
+                        continue
+                    motivo = "no está %s" % " ni ".join(quien)
+                elif quien == "todos" or quien in salas:
+                    continue
+                else:
+                    motivo = "en la sala %s no hay nadie" % nombre_sala.get(quien, quien)
+                out.append("%s: reunión «%s»: hoy no convoca a nadie (%s)"
+                           % (cfg.get("fichero", "salas"), r.get("nombre", "Reunión"), motivo))
+        return out
 
     # ------------------------------------------------------------ noticias
 
@@ -288,6 +316,8 @@ class Mundo:
                     invitadas = hs
                 else:
                     invitadas = [x for x in hs if x.sala == str(quien).lower()]
+                if not invitadas:   # no hay nadie a quien convocar (sale un aviso): no se hace
+                    continue
                 for x in invitadas:
                     x.convocar(self, sala, fin, "reunion")
                 self.noticia("%s en la sala %s." % (r.get("nombre", "Reunión"), sala.nombre))

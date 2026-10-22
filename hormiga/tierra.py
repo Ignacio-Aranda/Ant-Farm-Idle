@@ -145,7 +145,8 @@ class Plan:
     def __init__(self, semilla, fundacion, principales, dias_obras=330, obras=None, entrada=ENTRADA,
                  sur=False):
         """principales: lista de dicts (clave, nombre, color, planta, ancho, x, tipo, funcion).
-        obras: las salas que se excavan durante el año (por defecto OBRAS).
+        obras: las salas que se excavan durante el año (por defecto OBRAS); con "minimo", las
+        columnas que necesitan los muebles de su tipo (si no caben, no se estrechan más).
         sur: hemisferio sur (las estaciones, y con ellas el ritmo de las obras, al revés)."""
         self.semilla = semilla
         self.fundacion = fundacion
@@ -200,11 +201,11 @@ class Plan:
 
     # ----------------------------------------------------------- el nido
 
-    def _libre(self, nivel, a, b, margen=GAP):
+    def _libre(self, nivel, a, b, margen=GAP, ocupado=None):
         """¿Están libres las columnas a..b del nivel (sin salas ni rampas cerca)?"""
         if a < BORDE or b > ANCHO - 1 - BORDE:
             return False
-        return all(b + margen < x0 or a - margen > x1 for x0, x1 in self.ocupado[nivel])
+        return all(b + margen < x0 or a - margen > x1 for x0, x1 in (ocupado or self.ocupado)[nivel])
 
     def _ocupar(self, nivel, a, b):
         self.ocupado[nivel].append((min(a, b), max(a, b)))
@@ -236,19 +237,22 @@ class Plan:
         self.tramo[nivel] = _unir(self.tramo[nivel], (x0, x0 + s.ancho - 1))
         return True
 
-    def _rampa_libre(self, arriba, abajo, x, sentido, largo):
-        """¿Puede bajar una rampa desde x sin meterse en ninguna sala? Al principio va pegada
-        al suelo de la planta de arriba y al final al techo de las salas de la de abajo,
-        así que sólo se mira cada tramo contra las salas de su planta."""
+    def _tramos_rampa(self, arriba, abajo, x, sentido, largo):
+        """Los tramos de una rampa que bajan desde x que no pueden tocar ninguna sala: (planta,
+        desde, hasta). Al principio va pegada al suelo de la planta de arriba y al final al techo
+        de las salas de la de abajo, así que cada tramo sólo se mira contra las salas de su planta."""
         alto_sala = ALTO_SALA - 1
         hasta_arriba = ALTO_GALERIA * 2 - 2                               # columnas junto a la planta de arriba
         desde_abajo = max(0, largo - 2 * (alto_sala + ALTO_GALERIA - 3))   # columnas junto a la de abajo
         def tramo(i, j):
             a, b = sorted((x + sentido * i, x + sentido * j))
             return a, b
-        if arriba and not self._libre(arriba, *tramo(0, min(largo, hasta_arriba)), 1):
-            return False
-        return self._libre(abajo, *tramo(desde_abajo, largo), 1)
+        tramos = [(arriba,) + tramo(0, min(largo, hasta_arriba))] if arriba else []
+        return tramos + [(abajo,) + tramo(desde_abajo, largo)]
+
+    def _rampa_libre(self, arriba, abajo, x, sentido, largo):
+        """¿Puede bajar una rampa desde x sin meterse en ninguna sala?"""
+        return all(self._libre(n, a, b, 1) for n, a, b in self._tramos_rampa(arriba, abajo, x, sentido, largo))
 
     def _elegir_rampa(self, arriba, abajo, cerca, sentido_previo):
         """Busca dónde poner la rampa de la planta `arriba` a la de `abajo` (0 = superficie):
@@ -277,23 +281,32 @@ class Plan:
         """Prueba varias colocaciones al azar del nido (con sus obras del año) y se queda con la
         primera en la que se llega a todas las salas desde la entrada (el día 0 y al acabar el
         año), ninguna rampa atraviesa una sala y caben todas. Si no hay ninguna así, con la mejor
-        en ese orden; y si todas dejan alguna sala sin camino, quita la sala que estorba (con el
-        aviso de que no cabe) y vuelve a probar."""
-        fuera = []
+        en ese orden; y si todas dejan alguna sala sin camino, quita las salas que estorban (con
+        el aviso de que no caben) y vuelve a probar. Para quitar las menos posibles se mira la
+        colocación en la que caben más (las apretadas a un lado): las que ni así caben se quedan
+        fuera, y de cada rampa que atraviesa salas, una de ellas."""
+        fuera = {}   # clave -> por qué no está: "sitio" (no cabe en su planta) o "rampas"
         while True:
-            mejor = None
+            mejor = base = None
             for intento in range(INTENTOS + 2):
                 nota = self._probar(principales, fuera, dias, intento, mejor and mejor[0])
                 if mejor is None or nota > mejor[0]:
                     mejor = (nota, intento)
+                if base is None or (nota[2], nota, -len(self.rampas_malas)) > base[0]:
+                    base = ((nota[2], nota, -len(self.rampas_malas)), intento)
                 if nota == (True, True, len(principales) - len(fuera)):
                     break
-            if mejor[1] != intento:
-                self._probar(principales, fuera, dias, mejor[1])
-            quitar = None if mejor[0][0] else self._estorbo()
-            if quitar is None:
+            quitar = []
+            if not mejor[0][0]:   # alguna sala sin camino: qué estorba, donde caben más salas
+                intento = base[1]
+                self._probar(principales, fuera, dias, intento)
+                quitar = self._estorbo()
+            if not quitar:
+                if mejor[1] != intento:
+                    self._probar(principales, fuera, dias, mejor[1])
                 break
-            fuera.append(quitar)
+            fuera.update((clave, "sitio") for clave in self.no_caben)
+            fuera.update((clave, "rampas") for clave in quitar)
         if self.rampa_mala is not None:
             self.avisos.append("no hay sitio para una rampa sin atravesar una sala (planta %d)" % self.rampa_mala)
         if self.aisladas:
@@ -305,6 +318,8 @@ class Plan:
         Si ni con todo conectado sería mejor que la nota `otra`, no se buscan los caminos."""
         self.intento = intento
         self.rampa_mala = None
+        self.rampas_malas = []   # las rampas que atraviesan alguna sala: (su planta de abajo, lo ocupado
+                                 # en sus dos plantas cuando se trazó)
         self.avisos = []
         self.aisladas = []
         self.rng = random.Random("plan-%s" % self.semilla)
@@ -328,28 +343,47 @@ class Plan:
         return [s for s in salas if any((x, s.piso) not in llega for x in s.sitios())]
 
     def _estorbo(self):
-        """La sala del nido que hay que quitar para que quede conectado: una de las que atraviesa
-        la rampa mala (o de sus plantas) o, si no hay rampa mala, una a la que no se llega.
-        Mejor una sin columna fija y de las últimas en colocarse. None si no queda ninguna."""
+        """Las salas del nido que hay que quitar para que quede conectado: una de las que atraviesa
+        la primera rampa mala (mejor de la planta en la que su tramo no cabía en ninguna parte y, si
+        no, de la de abajo) y, de las demás rampas malas, una sólo si su tramo no cabe por culpa de
+        las salas (si no, puede que sea por cómo ha quedado la primera); nunca dos de la misma planta
+        a la vez. Si no hay rampas malas, una sala a la que no se llega. Mejor una sin columna fija
+        y de las últimas en colocarse. Vacía si no queda ninguna."""
         nido = [s for s in self.salas_todas if s.principal]
-        if self.rampa_mala is not None:
-            n = self.rampa_mala
+        def ultima(candidatas):
+            return max(enumerate(candidatas), key=lambda e: (e[1].clave not in self.fijas, e[0]))[1]
+        def toca(s, nivel, a, b):
+            return s.nivel == nivel and not (b + 1 < s.x0 or a - 1 > s.x0 + s.ancho - 1)
+        salas = {n: [(s.x0, s.x0 + s.ancho - 1) for s in nido if s.nivel == n] for n in PISOS}
+        quitar = []
+        for k, (n, ocupado) in enumerate(self.rampas_malas):
             _, _, x, x2 = self.rampas[n - 1]
+            largo = abs(x2 - x)
+            tramos = self._tramos_rampa(n - 1, n, x, 1 if x2 >= x else -1, largo)
+            sitios = [self._tramos_rampa(n - 1, n, xx, sentido, largo) for xx in range(BORDE, ANCHO - BORDE)
+                      for sentido in (1, -1) if BORDE <= xx + sentido * largo <= ANCHO - 1 - BORDE]
+            cabe = [any(self._libre(*t[i], 1, ocupado if k == 0 else salas) for t in sitios)
+                    for i in range(len(tramos))]
             lo, hi = min(x, x2), max(x, x2)
-            cerca = [s for s in nido if s.nivel in (n - 1, n)]
-            candidatas = [s for s in cerca if not (hi + 1 < s.x0 or lo - 1 > s.x0 + s.ancho - 1)] or cerca
-        else:
-            candidatas = [s for s in self.aisladas if s.principal]
-        candidatas = candidatas or nido
-        if not candidatas:
-            return None
-        return max(enumerate(candidatas), key=lambda e: (e[1].clave not in self.fijas, e[0]))[1].clave
+            orden = [tramos[i] for i in sorted(range(len(tramos)), key=lambda i: (cabe[i], -i))
+                     if k == 0 or not cabe[i]]
+            # y si la primera sólo choca con otras rampas, las salas que pisa de punta a punta
+            for nivel, a, b in orden + ([(n, lo, hi), (n - 1, lo, hi)] if k == 0 else []):
+                candidatas = [s for s in nido if toca(s, nivel, a, b)]
+                if candidatas and all(q.nivel != nivel for q in quitar):
+                    quitar.append(ultima(candidatas))
+                    break
+        if not quitar:
+            candidatas = [s for s in self.aisladas if s.principal] or nido
+            quitar = [ultima(candidatas)] if candidatas else []
+        return [s.clave for s in quitar]
 
     def _probar_nido(self, principales, fuera):
         self.obras = []
         self.ocupado = {n: [] for n in PISOS}
         self.tramo = {n: None for n in PISOS}     # (x_ini, x_fin) de la galería de cada planta
         colocadas = []
+        self.no_caben = []
         salas = []
         for d in principales:
             nivel = max(1, min(len(PISOS) - 1, int(d.get("planta", 2))))
@@ -361,15 +395,19 @@ class Plan:
         # primero las que tienen columna fija, luego las demás (en orden de nombre de fichero)
         for s, nivel, x in sorted(salas, key=lambda e: (e[2] is None, e[0].clave)):
             if s.clave in fuera:
-                self.avisos.append("%s no cabe en la planta %d (no deja sitio a las rampas)" % (s.nombre, nivel))
+                motivo = " (no deja sitio a las rampas)" if fuera[s.clave] == "rampas" else ""
+                self.avisos.append("%s no cabe en la planta %d%s" % (s.nombre, nivel, motivo))
             elif self._colocar(s, nivel, x):
                 colocadas.append(s)
+            else:
+                self.no_caben.append(s.clave)
         hondo = max([s.nivel for s in colocadas], default=1)
         # túneles: rampa desde la superficie y de cada planta a la siguiente
         celdas = []
         x, x2, sentido, libre = self._elegir_rampa(0, 1, self.entrada_preferida, 0)
         if not libre:
             self.rampa_mala = 1
+            self.rampas_malas.append((1, {k: list(self.ocupado[k]) for k in (0, 1)}))
         self.entrada = x
         self.rampas = [(0, 1, x, x2)]
         celdas += rampa(x, 0, x2, PISOS[1])
@@ -379,6 +417,7 @@ class Plan:
             x, x2, sentido, libre = self._elegir_rampa(n, n + 1, 0, sentido)
             if not libre:
                 self.rampa_mala = n + 1
+                self.rampas_malas.append((n + 1, {k: list(self.ocupado[k]) for k in (n, n + 1)}))
             self.rampas.append((n, n + 1, x, x2))
             celdas += rampa(x, PISOS[n], x2, PISOS[n + 1])
             self.tramo[n] = _unir(self.tramo[n], (x, x))
@@ -466,12 +505,14 @@ class Plan:
         # del nido ni con otra obra del mismo nombre; el tipo sigue saliendo del nombre
         claves = {s.clave for s in self.salas_todas}
         for d in self.salas_obras:
-            ancho = int(d.get("ancho", 22))
+            # nunca más estrecha de lo que necesitan los muebles de su tipo ("minimo", en columnas)
+            minimo = int(d.get("minimo", 0))
+            ancho = max(int(d.get("ancho", 22)), minimo)
             hueco = self._hueco_obra(ancho)
             while hueco is None and self.hondo < len(PISOS) - 1 and self._bajar_planta(obras):
                 hueco = self._hueco_obra(ancho)
-            while hueco is None and ancho > 14:
-                ancho -= 4
+            while hueco is None and ancho > max(14, minimo):
+                ancho = max(ancho - 4, minimo)
                 hueco = self._hueco_obra(ancho)
             if hueco is None:
                 self.sin_sitio.append(d["nombre"])

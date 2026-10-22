@@ -35,8 +35,9 @@ aviso en la franja amarilla de la pantalla y se usa el valor por defecto (`otra`
 En el suelo: `izquierda`, `centro_izquierda`, `centro`, `centro_derecha`, `derecha`.
 En la pared: `pared_izquierda`, `pared`, `pared_derecha`.
 Cada pieza ya sabe si va en el suelo o en la pared; si no pones `sitio`, usa el suyo.
-Si el hueco no existe, sale un aviso y la pieza va a su sitio de siempre. Si una pieza
-no existe, o no cabe en la sala (en las más estrechas), no se pinta y sale un aviso.
+Si el hueco no existe, sale un aviso y la pieza va a su sitio de siempre; con un número
+de fuera del 0 al 100, también sale un aviso y se queda en el borde. Si una pieza no
+existe, o no cabe en la sala (en las más estrechas), no se pinta y sale un aviso.
 
 ## Piezas
 

@@ -89,6 +89,13 @@ def _dia(v):
         return None
 
 
+def _fundacion(v):
+    """La fundación como date, o None si está mal escrita o es de un año sin sentido (con
+    9999-12-31 no se podrían contar los días que vienen)."""
+    d = _dia(v)
+    return d if d and 1900 <= d.year <= 2999 else None
+
+
 def _hora(v):
     """"HH:MM" (o una hora de TOML) -> (h, m), o None si está mal escrita o fuera de rango."""
     if isinstance(v, datetime.time):
@@ -148,6 +155,7 @@ def _sala(d, nombre, tipos, avisos):
     if tipo not in tipos:
         avisos.append("%s: no existe el tipo «%s» (en tipos/)" % (donde, tipo))
     color = d.get("color", "blanco")
+    color = color.strip() if isinstance(color, str) else color
     if color and not es_color(color):
         avisos.append("%s: no existe el color «%s» (puse blanco)" % (donde, color))
         color = "blanco"
@@ -167,6 +175,8 @@ def _sala(d, nombre, tipos, avisos):
         if not m["nombre"]:
             avisos.append("%s: hay un [[miembro]] sin nombre" % donde)
             continue
+        if isinstance(m.get("color"), str):
+            m["color"] = m["color"].strip()
         if m.get("color") and not es_color(m["color"]):
             avisos.append("%s: %s: no existe el color «%s»" % (donde, m["nombre"], m["color"]))
             del m["color"]
@@ -220,8 +230,9 @@ def _repetidos(salas, idos, avisos):
                 if otro.lower() in vistos:
                     avisos.append("%s: «%s» está repetido; sale una sola vez" % (s["fichero"], n))
                     continue
-                avisos.append("hay dos «%s» (en %s y en %s): la segunda sale como «%s»"
-                              % (n, vistos[n.lower()], s["fichero"], otro))
+                donde = [vistos[n.lower()]] + ([s["fichero"]] if s["fichero"] != vistos[n.lower()] else [])
+                avisos.append("hay dos «%s» (en %s): la segunda sale como «%s»"
+                              % (n, " y en ".join(donde), otro))
                 m = dict(m, nombre=otro)
             vistos[m["nombre"].lower()] = s["fichero"]
             miembros.append(m)
@@ -235,7 +246,8 @@ def _repetidos(salas, idos, avisos):
 
 def _convocadas(salas, avisos):
     """A quién convoca cada [[reunion]]: "todos", la clave de una sala (vale también su nombre:
-    "diseno" o "Diseño") o una lista de nombres (vale uno suelto). Si no es nadie, se quita."""
+    "diseno" o "Diseño") o una lista de nombres (vale uno suelto). Si no es nadie, se quita
+    con un aviso (las que un día no convocan a nadie que esté, las avisa el hormiguero)."""
     sala_de = {_llano(s["nombre"]): s["clave"] for s in salas}
     sala_de.update({_llano(s["clave"]): s["clave"] for s in salas})
     gente = {_llano(m["nombre"]): m["nombre"] for s in salas for m in s["miembros"]}
@@ -249,6 +261,9 @@ def _convocadas(salas, avisos):
                 quien = sala_de[_llano(quien)]
             else:
                 nombres = []
+                if quien == []:
+                    avisos.append("%s: reunión «%s»: quien está vacío, así que no convoca a nadie"
+                                  % (s["fichero"], r.get("nombre", "Reunión")))
                 for n in (quien if isinstance(quien, list) else [quien]):
                     if _llano(n) in gente:
                         nombres.append(gente[_llano(n)])
@@ -331,20 +346,22 @@ def cargar(args, avisos):
         general_usuario, fallo = {}, True
     # sin fundación o sin semilla en config.toml: las del primer arranque (local/estado.json),
     # que sólo se apuntan con el reloj de verdad. Si config.toml no se ha podido leer, las del
-    # último hormiguero que se guardó: una errata no cambia de hormiguero
+    # hormiguero de verdad (las del primer arranque o, si no las hay, las del último que se
+    # guardó): una errata no cambia de hormiguero
     falta_f, falta_s = "fundacion" not in general_usuario, "semilla" not in general_usuario
-    mal_f = not falta_f and _dia(general_usuario["fundacion"]) is None
+    mal_f = not falta_f and _fundacion(general_usuario["fundacion"]) is None
     if mal_f:   # se usa la del primer arranque si la hay (sin crearla), o la de por defecto
-        avisos.append("config: fundacion mal escrita (%s), usa AAAA-MM-DD" % general_usuario["fundacion"])
+        avisos.append("config: fundacion mal escrita (%s), usa AAAA-MM-DD (de 1900 a 2999)"
+                      % general_usuario["fundacion"])
     if falta_f or falta_s or mal_f:
         hoy = T.ahora(cfg.get("ciudad", {}).get("zona_horaria")).date()
-        previo = E.ultimo(RAIZ) if fallo else None
+        previo = E.de_verdad(RAIZ) if fallo else None
         fundacion, semilla = previo or E.inicio(RAIZ, falta_f, falta_s, guarda_estado(args) and not fallo, hoy)
         if (falta_f or mal_f) and fundacion:
             cfg["general"]["fundacion"] = fundacion
         if falta_s and semilla is not None:
             cfg["general"]["semilla"] = semilla
-    fundacion = _dia(cfg["general"]["fundacion"]) or _dia(POR_DEFECTO["general"]["fundacion"])
+    fundacion = _fundacion(cfg["general"]["fundacion"]) or _dia(POR_DEFECTO["general"]["fundacion"])
     cfg["general"]["fundacion"] = fundacion.isoformat()
     tipos = cargar_tipos(args.tipos, avisos)
     cfg["tipos"] = tipos

@@ -37,9 +37,9 @@ Teclas: `q` o `Esc` para salir, `f` pantalla completa, `i` fotogramas por segund
 ## Ponerlo a tu gusto
 
 Todo se configura con ficheros de texto ([TOML](https://toml.io/es/)). Los cambios de
-gente, reuniones, idas y fiestas se aplican solos a los pocos segundos de guardar; lo
-demás (nombre, color, sitio, ancho, tipo y muebles de las salas, los tipos y
-`config.toml`) al reiniciar. Los de este repositorio son de ejemplo: los tuyos pueden
+gente, reuniones, muebles de las salas, idas y fiestas se aplican solos a los pocos
+segundos de guardar; lo demás (nombre, color, sitio, ancho y tipo de las salas, los
+tipos y `config.toml`) al reiniciar. Los de este repositorio son de ejemplo: los tuyos pueden
 ir en `local/`, fuera de git (mira [Tus datos](#tus-datos)).
 
 Si algo está mal escrito (una fecha, un color, una sala demasiado estrecha...), el
@@ -95,8 +95,9 @@ que crecen con los días... La lista completa está en [tipos/LEEME.md](tipos/LE
 
 Las salas que excavan durante el año (despensa, museo, vivero de hongos, almacén y
 biblioteca, se pueden cambiar en `[nido]`) se ponen en los huecos libres. Si ya no
-caben, abren una planta más honda con una rampa nueva o las hacen más estrechas; si
-el hormiguero está lleno del todo, se quedan sin hacer y lo cuenta el diario.
+caben, abren una planta más honda con una rampa nueva o las hacen más estrechas (nunca
+tanto que no quepan los muebles de su tipo); si el hormiguero está lleno del todo, se
+quedan sin hacer y lo cuenta el diario.
 
 ### Paisaje
 
@@ -166,7 +167,8 @@ o el servicio no cambia nada:
 Lo excavado y dónde estaba cada hormiga se guardan aparte para cada hormiguero (cada
 fundación y semilla): una prueba con otra semilla (`--semilla 7`) o con otra fundación
 tiene lo suyo y no toca lo del hormiguero de verdad. Si `config.toml` tiene una errata y
-no se puede leer, sigue con el último hormiguero que se guardó.
+no se puede leer, sigue con el de verdad: el de la fundación y la semilla del primer
+arranque o, si estaban en `config.toml`, el último que se guardó.
 
 Se guarda cada minuto y al pararlo, así que para empezar un hormiguero de cero hay que
 borrar `local/estado.json` con el hormiguero parado (si no, lo vuelve a escribir). En la Pi:

@@ -174,7 +174,7 @@ def rgb(valor):
     """RGB de un valor de configuración (nombre, número, "#hex" o (r, g, b))."""
     if isinstance(valor, (list, tuple)) and len(valor) == 3:
         return tuple(int(v) for v in valor)
-    if isinstance(valor, str) and valor.startswith("#"):
+    if isinstance(valor, str) and valor.strip().startswith("#"):
         return hex_a_rgb(valor)
     return rgb_de_256(color(valor).c256)
 

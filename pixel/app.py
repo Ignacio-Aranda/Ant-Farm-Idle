@@ -57,11 +57,14 @@ def argumentos(argv=None):
 
 
 def cargar(A, args, avisos):
-    """Lee los ficheros (hormiga.app.cargar) y avisa de los muebles que no existen."""
+    """Lee los ficheros (hormiga.app.cargar) y avisa de los muebles que no existen. Apunta en
+    cada tipo las columnas que necesitan sus muebles (las obras no se estrechan más)."""
     from . import muebles as MU
     cfg, salas, idos, fiestas = A.cargar(args, avisos)
     for t in cfg["tipos"].values():
         MU.revisar(t["muebles"], t["fichero"], avisos)
+        piezas = [str(mu.get("pieza", "")).lower() for mu in t["muebles"]]
+        t["ancho_minimo"] = max([MU.ancho_minimo(p) for p in piezas if p in MU.PIEZAS], default=0)
     for s in salas:
         MU.revisar(s["muebles"], s["fichero"], avisos)
     return cfg, salas, idos, fiestas
@@ -180,7 +183,8 @@ def con_pantalla(args):
                 nueva = firma(args)
                 if nueva != huella:
                     huella = nueva
-                    # los avisos de los ficheros se rehacen; los del trazado y el dibujo se quedan
+                    # se rehacen los avisos de los ficheros (y, al repintar las salas, los de sus
+                    # muebles); los del trazado se quedan
                     nuevos = []
                     try:
                         _cfg, salas, idos, fiestas = cargar(A, args, nuevos)
@@ -190,7 +194,7 @@ def con_pantalla(args):
                         m.actualizar_contexto(forzar=True)
                     except Exception as e:   # sigue con lo que tenía
                         m.avisos_carga.append("no he podido recargar los ficheros: %s" % e)
-                    r.clave_sup = None
+                    r.recargado()
             if args.demo:
                 m.pausa_texto = reloj.texto if reloj.en_pausa() else None
             t0 = time.perf_counter()

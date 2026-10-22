@@ -380,6 +380,13 @@ class Render:
         if texto not in self.m.avisos:
             self.m.avisos.append(texto)
 
+    def recargado(self):
+        """Tras recargar los ficheros: se repintan la superficie y las salas (sus muebles, y con
+        ellos los avisos de los que no caben, pueden haber cambiado)."""
+        self.clave_sup = None
+        self.dia_pintado = None
+        self.__dict__.pop("_cache_vivas", None)
+
     # ================================================================ superficie
 
     def _clave_superficie(self):
@@ -511,47 +518,75 @@ class Render:
     def _cementerio(self, s, G):
         m = self.m
         self.cementerio_px = None   # de dónde a dónde va (en píxeles), para no taparlo
+        m.avisos_dibujo[("cementerio",)] = []
         if not m.idos:
             return
-        sup = m.superficie
-        # que no quede encima de una salida (los montículos de tierra la taparían)
-        def choca(x0, total):
-            return any(x0 - 8 <= s <= x0 + total + 8 for s in m.salidas_x_grid)
-        # cada lápida, tan ancha como su nombre (con margen); si no hay sitio, con letra más pequeña
-        for tam in (7, 6, 5):
-            textos = [self.letras.texto(n, (40, 40, 48), tam, sombra=False) for n in m.idos]
+        # los huecos entre las salidas, en columnas: nunca encima de una (los montículos de tierra
+        # taparían las lápidas)
+        huecos, x = [], 2
+        for sx in sorted(m.salidas_x_grid):
+            huecos.append((x, sx - 9))
+            x = max(x, sx + 9)
+        huecos.append((x, m.plan_ancho - 2))
+        mayor = max(b - a for a, b in huecos)
+
+        def medir(nombres, tam, filas):
+            """Cada lápida, tan ancha como su nombre (con margen). Con dos filas, las k primeras van
+            detrás (asoman por encima de las de delante), repartidas para que ocupen lo menos posible."""
+            textos = [self.letras.texto(n, (40, 40, 48), tam, sombra=False) for n in nombres]
             anchos = [max(5, math.ceil((t.get_width() + 8) / CW)) for t in textos]
-            total = sum(anchos) + len(anchos) + 3
-            x = min(sup.cementerio_x, m.plan_ancho - total - 2)
-            if choca(x, total):
-                libres = [x0 for x0 in range(2, m.plan_ancho - total - 2) if not choca(x0, total)]
-                if libres:
-                    x = min(libres, key=lambda x0: abs(x0 - x))
-            if not choca(x, total):
+            def largo(a, b):
+                return sum(anchos[a:b]) + b - a
+            k = len(anchos)
+            if filas == 2 and k > 1:
+                k = min(range(1, k), key=lambda i: max(largo(0, i), largo(i, len(anchos))))
+            return textos, anchos, k, max(largo(0, k), largo(k, len(anchos))) + 3
+        # en el hueco más grande: si no caben, con letra más pequeña, luego en dos filas y, como
+        # último recurso, sólo las de los últimos que se fueron (con un aviso)
+        nombres = list(m.idos)
+        for q in range(len(nombres)):
+            for filas, tam in ((1, 7), (1, 6), (1, 5), (2, 6), (2, 5)):
+                textos, anchos, k, total = medir(nombres[q:], tam, filas)
+                if total <= mayor:
+                    break
+            if total <= mayor:
                 break
+        fuera = nombres[:q] if total <= mayor else nombres
+        if fuera:
+            m.avisos_dibujo[("cementerio",)] = ["idos.toml: no caben todas las lápidas en el cementerio "
+                                                "(no salen %s)" % ", ".join(fuera)]
+        if total > mayor:
+            return
+        pref = min(m.superficie.cementerio_x, m.plan_ancho - total - 2)
+        x = min((x0 for a, b in huecos for x0 in range(a, b - total + 1)), key=lambda x0: abs(x0 - pref))
         x0 = self.px(x)
         # valla
         ancho_px = self.px(total)
         self.cementerio_px = (x0, x0 + ancho_px)
         pygame.draw.line(s, (120, 90, 60), (x0, G - 5), (x0 + ancho_px, G - 5))
-        for k in range(0, ancho_px + 1, 6):
-            pygame.draw.line(s, (120, 90, 60), (x0 + k, G - 8), (x0 + k, G))
+        for p in range(0, ancho_px + 1, 6):
+            pygame.draw.line(s, (120, 90, 60), (x0 + p, G - 8), (x0 + p, G))
+        alto = 22 if k == len(textos) else 36   # con dos filas, las de detrás asoman por encima
         rip = self.letras.texto("R.I.P.", (200, 200, 205), 8)
-        self._textos_superficie.append((rip, (x0 + ancho_px // 2 - rip.get_width() // 2, G - 34)))
-        cx = x0 + 8
-        for t, w in zip(textos, anchos):
-            ancho = self.px(w) - 2
-            lap = pygame.Rect(cx, G - 22, ancho, 22)
-            pygame.draw.rect(s, (110, 110, 118), lap, border_top_left_radius=6, border_top_right_radius=6)
-            pygame.draw.rect(s, (150, 150, 158), lap.inflate(-4, -4), border_top_left_radius=4,
-                             border_top_right_radius=4)
-            s.blit(t, (cx + ancho // 2 - t.get_width() // 2, G - 15 + (7 - tam) // 2))
-            pygame.draw.line(s, (90, 90, 96), (cx + ancho // 2, G - 20), (cx + ancho // 2, G - 17))
-            pygame.draw.line(s, (90, 90, 96), (cx + ancho // 2 - 2, G - 19), (cx + ancho // 2 + 2, G - 19))
-            if "difuntos" in m.decoraciones:
-                pygame.draw.circle(s, (220, 40, 40), (cx + 3, G - 2), 2)
-                pygame.draw.circle(s, (250, 200, 60), (cx + ancho - 4, G - 2), 2)
-            cx += self.px(w + 1)
+        self._textos_superficie.append((rip, (x0 + ancho_px // 2 - rip.get_width() // 2, G - alto - 12)))
+        filas = [(textos[:k], anchos[:k], alto), (textos[k:], anchos[k:], 22)]
+        delante = 1 if textos[k:] else 0   # la fila de delante, la que lleva las flores de difuntos
+        for fila, (ts, ws, h) in enumerate(filas):
+            cx = x0 + 8 + self.px(total - 3 - sum(ws) - len(ws)) // 2   # cada fila, centrada
+            for t, w in zip(ts, ws):
+                ancho = self.px(w) - 2
+                lap = pygame.Rect(cx, G - h, ancho, h)
+                pygame.draw.rect(s, (110, 110, 118), lap, border_top_left_radius=6, border_top_right_radius=6)
+                pygame.draw.rect(s, (150, 150, 158), lap.inflate(-4, -4), border_top_left_radius=4,
+                                 border_top_right_radius=4)
+                s.blit(t, (cx + ancho // 2 - t.get_width() // 2, G - h + 7 + (7 - tam) // 2))
+                medio = cx + ancho // 2   # la cruz
+                pygame.draw.line(s, (90, 90, 96), (medio, G - h + 2), (medio, G - h + 5))
+                pygame.draw.line(s, (90, 90, 96), (medio - 2, G - h + 3), (medio + 2, G - h + 3))
+                if "difuntos" in m.decoraciones and fila == delante:
+                    pygame.draw.circle(s, (220, 40, 40), (cx + 3, G - 2), 2)
+                    pygame.draw.circle(s, (250, 200, 60), (cx + ancho - 4, G - 2), 2)
+                cx += self.px(w + 1)
 
     def _pino(self, s, x, G):
         pygame.draw.rect(s, (100, 66, 40), (x + 9, G - 6, 4, 6))
@@ -847,10 +882,11 @@ class Render:
             s.set_at((x + 1, y + 2), claro(col, 0.5))
 
     def _piezas(self, sala):
-        """Los muebles de la sala que ya han aparecido: (pieza, sitio, contexto)."""
+        """Los muebles de la sala que ya han aparecido: (pieza, sitio, contexto). Los que no caben
+        no se pintan y su aviso se rehace cada vez (si los quitan del fichero, el aviso se va)."""
         m = self.m
         dia = int(m.dia)
-        out, cuenta = [], {}
+        out, cuenta, no_caben = [], {}, []
         for mu in m.muebles_de(sala):
             pieza = str(mu.get("pieza", "")).lower()
             if pieza not in MU.PIEZAS:   # el aviso sale al cargar (muebles.revisar)
@@ -862,11 +898,12 @@ class Render:
             if aparece > dia:
                 continue
             if sala.ancho < MU.ancho_minimo(pieza):   # no se pinta: se saldría de la sala
-                self._aviso("%s: «%s» no cabe en la sala (tiene %d columnas y hacen falta %d)"
-                            % (sala.nombre, pieza, sala.ancho, MU.ancho_minimo(pieza)))
+                no_caben.append("%s: «%s» no cabe en la sala (tiene %d columnas y hacen falta %d)"
+                                % (sala.nombre, pieza, sala.ancho, MU.ancho_minimo(pieza)))
                 continue
             k = cuenta[pieza] = cuenta.get(pieza, -1) + 1
             out.append((pieza, mu.get("sitio"), MU.Contexto(self, dia, aparece, k)))
+        m.avisos_dibujo[("sala", sala.clave)] = no_caben
         return out
 
     def _muebles(self, s, sala, r, suelo_y):
@@ -1189,14 +1226,21 @@ class Render:
 
     # ---------------------------------------------------------------- salas (lo que se mueve)
 
-    def _piezas_vivas(self, sala):
-        """Las piezas animadas de la sala (se recalcula una vez al día)."""
-        clave = (sala.clave, int(self.m.dia))
+    def _piezas_vivas(self, sala, r):
+        """Las piezas animadas de la sala y dónde van los muebles de pared (para no colgar una
+        lámpara encima). Se recalcula una vez al día."""
+        clave = (sala.clave, int(self.m.dia), r.topleft)
         cache = self.__dict__.setdefault("_cache_vivas", {})
         if clave not in cache:
             if len(cache) > 200:
                 cache.clear()
-            cache[clave] = [p for p in self._piezas(sala) if MU.PIEZAS[p[0]][4]]
+            piezas = self._piezas(sala)
+            pared = []   # con un píxel de margen y tan altos como la pantalla, el más alto
+            for pieza, sitio, _ in piezas:
+                if MU.PIEZAS[pieza][1] == "pared":
+                    x, y = MU.colocar(pieza, sitio, r)
+                    pared.append(pygame.Rect(x - 1, y - 2, MU.PIEZAS[pieza][0] + 2, 24))
+            cache[clave] = ([p for p in piezas if MU.PIEZAS[p[0]][4]], pared)
         return cache[clave]
 
     def _salas_vivas(self, t):
@@ -1214,7 +1258,9 @@ class Render:
             suelo = r.bottom
             cartel = self._cartel(sala, r)[1]
             self.textos_salas.append(cartel)
+            vivas, pared = self._piezas_vivas(sala, r)
             # lámparas con luz cálida, sin tapar el cartel: a un lado o, si no caben, colgadas de él
+            # donde no tapen un mueble de pared (y si no hay ningún sitio así, sin esa lámpara)
             xs = [r.x + r.width // 4, r.x + 3 * r.width // 4] if r.width > 96 else [r.centerx]
             lamparas = []
             for lx in xs:
@@ -1225,6 +1271,13 @@ class Render:
                         lx = lado
                     else:
                         techo = cartel.bottom
+                        sitios = [lx, cartel.left + 5, cartel.right - 6]
+                        sitios += [x for w in pared for x in (w.left - 5, w.right + 4)]   # junto a ellos
+                        desde, hasta = max(r.x + 6, cartel.left + 2), min(r.right - 7, cartel.right - 3)
+                        lx = next((x for x in sitios if desde <= x <= hasta and
+                                   pygame.Rect(x - 4, techo, 9, 9).collidelist(pared + lamparas) == -1), None)
+                        if lx is None:
+                            continue
                 y = r.y if techo == r.y else techo - 6   # colgada del cartel, con el cable más corto
                 pygame.draw.line(dst, (60, 60, 60), (lx, techo), (lx, y + 8))
                 pygame.draw.polygon(dst, (170, 150, 90), [(lx - 4, y + 12), (lx + 4, y + 12), (lx + 2, y + 8),
@@ -1233,7 +1286,7 @@ class Render:
                 dst.blit(self.halo_lampara, (lx - 26, y - 10), special_flags=pygame.BLEND_ADD)
                 lamparas.append(pygame.Rect(lx - 4, techo, 9, y + 14 - techo))
             # lo que se mueve en los muebles (pantallas, vapor, burbujas, relojes)
-            for pieza, sitio, ctx in self._piezas_vivas(sala):
+            for pieza, sitio, ctx in vivas:
                 x, y = MU.colocar(pieza, sitio, r)
                 MU.PIEZAS[pieza][4](dst, x, y, r, ctx, t)
             # el cumpleaños: la frase, debajo del cartel (y de las lámparas que cuelguen de él)
@@ -1268,8 +1321,8 @@ class Render:
                     if not frase or libre(farolillo):
                         pygame.draw.ellipse(dst, c, farolillo)
             if "halloween" in deco:
-                # la telaraña, en la esquina y sin llegar al cartel (más pequeña si no cabe)
-                f = min(1.0, (cartel.left - r.x - 4) / 15)
+                # la telaraña, en la esquina, sin llegar al cartel ni a las lámparas (más pequeña si no cabe)
+                f = min(1.0, (min([cartel.left] + [lp.left for lp in lamparas]) - r.x - 4) / 15)
                 if f > 0.3:
                     for i in range(6):
                         pygame.draw.line(dst, (200, 200, 200), (r.x + 2, r.y + 2),

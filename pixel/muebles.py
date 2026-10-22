@@ -77,7 +77,7 @@ def sofa(s, x, suelo, r, c):
 def planta(s, x, suelo, r, c):
     edad = c.edad
     etapa = 0 if edad < 90 else 1 if edad < 240 else 2
-    cx = x + 8
+    cx = x + 16   # la maceta en el centro: crecida, las hojas llegan a 16 píxeles a cada lado
     pygame.draw.polygon(s, (180, 90, 50), [(cx - 4, suelo - 7), (cx + 4, suelo - 7), (cx + 3, suelo),
                                            (cx - 3, suelo)])
     hojas = [(6, 3), (12, 5), (18, 7)][etapa]
@@ -242,7 +242,7 @@ PIEZAS = {
     "escritorio_grande": (41, "suelo", "izquierda", lambda *a: escritorio(*a, grande=True), escritorio_vivo),
     "sillon": (12, "suelo", "centro_derecha", sillon, None),
     "sofa": (38, "suelo", "centro", sofa, None),
-    "planta": (16, "suelo", "derecha", planta, None),
+    "planta": (32, "suelo", "derecha", planta, None),
     "mesa_reuniones": (0, "suelo", "centro", mesa_reuniones, None),
     "mesa_comedor": (60, "suelo", "centro", mesa_comedor, None),
     "nevera": (16, "suelo", "izquierda", nevera, None),
@@ -262,20 +262,32 @@ PIEZAS = {
 
 def revisar(muebles, donde, avisos):
     """Avisa de las piezas y los huecos que no existen (al cargar los ficheros). Un sitio
-    escrito como texto con un número ("150") se pasa a número."""
+    escrito como texto con un número ("30,5") se pasa a número; uno que no existe se quita
+    (la pieza va a su sitio de siempre) y uno fuera de 0-100 se deja en el borde."""
     huecos = {**HUECOS_SUELO, **HUECOS_PARED}
     for mu in muebles:
         pieza = str(mu.get("pieza", "")).lower()
         if pieza not in PIEZAS:
             avisos.append("%s: no existe la pieza «%s»" % (donde, pieza))
         sitio = mu.get("sitio")
-        if sitio is None or isinstance(sitio, (int, float)) and not isinstance(sitio, bool):
+        if sitio is None:
+            continue
+        if isinstance(sitio, str) and sitio.strip().lower() in huecos:
+            mu["sitio"] = sitio.strip().lower()
             continue
         try:
-            mu["sitio"] = float(str(sitio).strip().replace(",", "."))
+            if isinstance(sitio, bool):
+                raise ValueError
+            numero = float(str(sitio).strip().replace(",", "."))
+            if not math.isfinite(numero):
+                raise ValueError
         except ValueError:
-            if str(sitio).lower() not in huecos:
-                avisos.append("%s: no existe el hueco «%s» (%s va a su sitio de siempre)" % (donde, sitio, pieza))
+            avisos.append("%s: no existe el hueco «%s» (%s va a su sitio de siempre)" % (donde, sitio, pieza))
+            del mu["sitio"]
+            continue
+        mu["sitio"] = max(0.0, min(100.0, numero))
+        if mu["sitio"] != numero:
+            avisos.append("%s: el sitio de %s va de 0 a 100 (puse %g)" % (donde, pieza, mu["sitio"]))
 
 
 def ancho_minimo(pieza):
@@ -287,7 +299,7 @@ def colocar(pieza, sitio, r):
     """Esquina (x, y) donde va la pieza dentro del rectángulo r de la sala.
     En las piezas de suelo, y es la línea del suelo; en las de pared, lo alto de la pieza."""
     ancho, donde, defecto = PIEZAS[pieza][:3]
-    sitio = defecto if sitio is None else sitio
+    sitio = defecto if sitio is None or isinstance(sitio, bool) else sitio
     if isinstance(sitio, (int, float)):
         frac = max(0.0, min(100.0, float(sitio))) / 100
     else:

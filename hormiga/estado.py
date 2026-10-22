@@ -81,6 +81,16 @@ def inicio(raiz, falta_fundacion, falta_semilla, guardar=True, hoy=None):
     return ini.get("fundacion"), ini.get("semilla")
 
 
+def de_verdad(raiz):
+    """La fundación y la semilla del hormiguero de verdad, para cuando config.toml no se puede
+    leer: las del primer arranque si están las dos (una prueba con --semilla 7 no las cambia)
+    y, si no, las del último hormiguero que se guardó (o None)."""
+    ini = _tabla(_leer(ruta(raiz)).get("inicio"))
+    if "fundacion" in ini and "semilla" in ini:
+        return ini["fundacion"], ini["semilla"]
+    return ultimo(raiz)
+
+
 def ultimo(raiz):
     """La fundación y la semilla del último hormiguero que se guardó, o None si no hay."""
     for clave, h in reversed(list(_hormigueros(_leer(ruta(raiz))).items())):
