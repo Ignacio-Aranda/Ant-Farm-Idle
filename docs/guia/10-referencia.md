@@ -598,7 +598,7 @@ Se pueden poner en cualquier sala. A esa hora, las hormigas citadas vienen a **e
 
 | Clave | Tipo | Por defecto | Qué hace |
 |---|---|---|---|
-| `nombre` | Texto | `"Reunión"` | Sale en el diario: «*nombre* en la sala *Sala*». |
+| `nombre` | Texto | `"Reunión"` | Sale en el diario: «*nombre* en la sala *Sala*» (o «en la Sala Azul», si la sala ya se llama «Sala …»). |
 | `dia` | Texto | `"todos"` | `lunes`, `martes`, `miércoles`, `jueves`, `viernes`, `sábado`, `domingo` (con o sin tilde), o `todos` (de lunes a viernes). |
 | `hora` | `"HH:MM"` | `"10:00"` | A qué hora empieza, de `"00:00"` a `"23:59"`. |
 | `minutos` | Número | `60` | Cuánto dura. |

@@ -331,6 +331,16 @@ class DiasYSemanas(Comprobaciones):
         h.avanzar(24 * 60)
         self.comprobar_hormigas(h.m)
 
+    def test_sala_que_ya_se_llama_sala(self):
+        """Una sala llamada «Sala …» no sale como «la sala Sala …» en el diario."""
+        salas = oficina()
+        salas["reuniones"] = sala("Sala Azul", 1, 30, "reuniones", reuniones=[
+            {"nombre": "Reunión de equipo", "dia": "lunes", "hora": "10:00", "minutos": 60, "quien": "todos"}])
+        h = Hormiguero(self, config(), salas, fecha=datetime.datetime(2026, 6, 1, 9, 59, 50))
+        h.fino(600)
+        noticias = [n[1] for n in h.m.noticias]
+        self.assertIn("Reunión de equipo en la Sala Azul.", noticias)
+
     def test_la_jefa_llama_al_despacho(self):
         """En horario de oficina y un día laborable, la jefa llama a alguien que no esté en
         una reunión (aquí, sin esperar los 10 minutos del principio)."""

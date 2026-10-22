@@ -24,6 +24,11 @@ PIEZAS_DIARIO = {"escritorio": "un escritorio", "escritorio_grande": "un escrito
                  "pizarra": "una pizarra", "reloj": "un reloj"}
 
 
+def la_sala(nombre):
+    """«la sala Reuniones», o «la Sala Azul» si la sala ya se llama «Sala …»."""
+    return ("la %s" if nombre.lower().startswith("sala ") else "la sala %s") % nombre
+
+
 def _fecha(v):
     """Una fecha "AAAA-MM-DD" (o de TOML, también con hora) como date; si no, ValueError."""
     if isinstance(v, datetime.datetime):   # 2026-03-01T09:00:00 sin comillas: vale el día
@@ -308,7 +313,7 @@ class Mundo:
                 elif quien == "todos" or quien in salas:
                     continue
                 else:
-                    motivo = "en la sala %s no hay nadie" % nombre_sala.get(quien, quien)
+                    motivo = "en %s no hay nadie" % la_sala(nombre_sala.get(quien, quien))
                 out.append("%s: reunión «%s»: hoy no convoca a nadie (%s)"
                            % (cfg.get("fichero", "salas"), r.get("nombre", "Reunión"), motivo))
         return out
@@ -321,7 +326,7 @@ class Mundo:
 
     def vida_entregada(self, h, cosa):
         destino = self.almacen_comida()
-        destino = ("la sala %s" % destino.nombre) if destino else "el nido"
+        destino = la_sala(destino.nombre) if destino else "el nido"
         if cosa.peso >= 2:
             ayudantes = [o.nombre for o in self.hormigas.values()
                          if o.escoltando and o.escoltando[0] is h]
@@ -370,7 +375,7 @@ class Mundo:
                     continue
                 for x in invitadas:
                     x.convocar(self, sala, fin, "reunion")
-                self.noticia("%s en la sala %s." % (r.get("nombre", "Reunión"), sala.nombre))
+                self.noticia("%s en %s." % (r.get("nombre", "Reunión"), la_sala(sala.nombre)))
         # el jefe llama a alguien al despacho de vez en cuando (días laborables, horario de oficina)
         jefe = next((c for c in self.salas_cfg if c.get("jefe")), None)
         ini, fin = self._franja("jornada", "09:00-18:00")
