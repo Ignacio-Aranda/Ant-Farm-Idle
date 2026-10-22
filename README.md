@@ -11,12 +11,16 @@ group of friends is an ant with their name, their room and their birthday. It gr
 by itself over the year, follows your city's real weather and celebrates holidays.
 Configuration and code are in Spanish.*
 
+**[Guía de usuario](docs/guia/README.md)**: cómo instalarlo, ponerlo a tu gusto y
+dejarlo siempre puesto en una Raspberry Pi, paso a paso y sin dar nada por sabido.
+
 ![El hormiguero de día](docs/dia.png)
 ![El hormiguero en Nochebuena](docs/noche.png)
 
 ## Probarlo
 
-Hace falta Python 3.11 o más nuevo y pygame.
+Hace falta Python 3.11 o más nuevo y pygame (pygame aún no tiene paquetes para la 3.14:
+con la 3.13 va bien). Paso a paso, en el [capítulo 1 de la guía](docs/guia/01-instalacion.md).
 
 ```bash
 pip install pygame
@@ -39,7 +43,7 @@ Teclas: `q` o `Esc` para salir, `f` pantalla completa, `i` fotogramas por segund
 Todo se configura con ficheros de texto ([TOML](https://toml.io/es/)). Los cambios de
 gente, reuniones, muebles de las salas, idas y fiestas se aplican solos a los pocos
 segundos de guardar; lo demás (nombre, color, sitio, ancho y tipo de las salas, los
-tipos y `config.toml`) al reiniciar. Los de este repositorio son de ejemplo: los tuyos pueden
+tipos y `config.toml`) al reiniciar, y mientras tanto un aviso te lo recuerda. Los de este repositorio son de ejemplo: los tuyos pueden
 ir en `local/`, fuera de git (mira [Tus datos](#tus-datos)).
 
 Si algo está mal escrito (una fecha, un color, una sala demasiado estrecha...), el
@@ -167,8 +171,8 @@ o el servicio no cambia nada:
 Lo excavado y dónde estaba cada hormiga se guardan aparte para cada hormiguero (cada
 fundación y semilla): una prueba con otra semilla (`--semilla 7`) o con otra fundación
 tiene lo suyo y no toca lo del hormiguero de verdad. Si `config.toml` tiene una errata y
-no se puede leer, sigue con el de verdad: el de la fundación y la semilla del primer
-arranque o, si estaban en `config.toml`, el último que se guardó.
+no se puede leer, sigue con el de verdad (y cavando como la última vez): el de la fundación
+y la semilla del primer arranque o, si estaban en `config.toml`, el último que se guardó.
 
 Se guarda cada minuto y al pararlo, así que para empezar un hormiguero de cero hay que
 borrar `local/estado.json` con el hormiguero parado (si no, lo vuelve a escribir). En la Pi:
@@ -221,9 +225,19 @@ y edita las copias. Cada uno sustituye entero al del repositorio (si haces
 `local/`, reinicia el hormiguero para que lo vea. También puedes guardarlos en otro sitio
 y arrancar con `--salas`, `--tipos`, `--idos`, `--calendario` y `-c` apuntando a ellos.
 
-## Galerías
+## Desarrollo
 
-Las imágenes de muebles, tipos de sala y paisaje de `docs/` se regeneran con
+**Pruebas.** Están en `tests/` y no necesitan pantalla ni tocan tu `local/` (todo se hace
+en carpetas temporales). Desde la carpeta del repositorio:
+
+```bash
+SDL_VIDEODRIVER=dummy python3 -m unittest discover -s tests -v
+```
+
+Tardan alrededor de un minuto. GitHub las pasa solas en cada cambio, con Python 3.11 y
+3.13 (`.github/workflows/tests.yml`).
+
+**Galerías.** Las imágenes de muebles, tipos de sala y paisaje de `docs/` se regeneran con
 `python3 herramientas/galeria.py` (por ejemplo, después de añadir una pieza nueva). Usa
 siempre los ficheros de ejemplo del repositorio (no los de `local/`) y no escribe en `local/`.
 
