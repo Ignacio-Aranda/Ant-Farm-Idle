@@ -222,9 +222,8 @@ https://api.openweathermap.org/data/2.5/weather?lat=36.72&lon=-4.42&units=metric
 
 ### Paso 4. Guarda la clave en el hormiguero
 
-Lo mejor es un fichero de texto con la clave dentro: `local/openweather_clave.txt`. La
-carpeta `local/` no se sube a git, así que tu clave no se publica. Sirve en el ordenador
-y en la Pi.
+Lo mejor es un fichero de texto con la clave dentro: `local/openweather_clave.txt`. Sirve
+en el ordenador y en la Pi, y la clave no se mezcla con los ficheros del hormiguero.
 
 **En macOS, Linux o la Pi**, dentro de la carpeta del hormiguero (en la Pi, entra en ella
 con `cd ~/Ant-Farm-Idle`). Crea la carpeta `local` (si ya existe, no pasa nada):
@@ -298,8 +297,8 @@ cada_minutos = 10
 clave = "TU_CLAVE"
 ```
 
-Pero **no la pongas en el `config.toml` del repositorio**: si lo subes a GitHub o lo
-compartes, cualquiera puede ver tu clave y usarla. Si la quieres ahí, que sea en
+Pero **no la pongas en el `config.toml` de ejemplo**: si lo compartes, cualquiera puede
+ver tu clave y usarla. Si la quieres ahí, que sea en
 `local/config.toml`.
 
 **En la Pi, el servicio no ve las variables** que pones con `export`: allí usa el fichero

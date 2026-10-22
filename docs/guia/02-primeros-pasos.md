@@ -193,8 +193,7 @@ la carpeta `local/`:
   No hay que poner ninguna opción, tampoco en el servicio de la Pi.
 - **Cada uno sustituye entero al de ejemplo.** Si haces `local/salas/`, salen solo las
   salas que haya dentro. Lo que no tengas en `local/` se sigue cogiendo del ejemplo.
-- **No se sube a git.** Así no publicas nombres ni cumpleaños, y `git pull` nunca pisa
-  tus cambios.
+- **Es solo tuya.** Cuando actualices el hormiguero, tus ficheros no se tocan.
 - **Al crear uno nuevo en `local/`, reinicia el hormiguero** para que lo vea.
 
 En `local/` vive también `estado.json`, que el hormiguero escribe solo. No lo toques.

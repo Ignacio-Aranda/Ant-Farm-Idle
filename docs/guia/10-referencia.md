@@ -912,7 +912,7 @@ La paleta de la que salen los colores de las hormigas que no tienen uno: `rojo_b
 
 ## 9. La carpeta `local/`
 
-No se sube a git. Ahí van tus datos y lo que el hormiguero guarda solo.
+Ahí van tus datos y lo que el hormiguero guarda solo. Al actualizar el hormiguero no se toca.
 
 | Fichero | Quién lo escribe | Qué es |
 |---|---|---|

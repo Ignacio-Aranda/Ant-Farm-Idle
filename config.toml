@@ -22,8 +22,8 @@ lon = -4.42
 
 [tiempo]
 # fuente = "openweather": tiempo real de https://openweathermap.org (gratis, hace falta una clave).
-#   La clave NO la pongas aquí si vas a subir el repo: usa el fichero
-#   local/openweather_clave.txt (no se sube) o la variable de entorno OPENWEATHER_API_KEY
+#   Guarda la clave en el fichero local/openweather_clave.txt (mejor que aquí: así no la
+#   enseñas si compartes este fichero) o en la variable de entorno OPENWEATHER_API_KEY
 #   (para el servicio de la Pi, en local/entorno: OPENWEATHER_API_KEY=tu_clave).
 # fuente = "estadistico": sin internet, con un clima de ejemplo (el de Málaga).
 # Si no hay clave o falla internet, se usa el estadístico.
