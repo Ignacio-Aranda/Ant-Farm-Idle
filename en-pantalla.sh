@@ -1,5 +1,6 @@
 #!/bin/bash
-# Ejecuta cualquier programa en la pantalla de la Pi (tty1) desde SSH, igual que el servicio.
+# Ejecuta cualquier programa en la pantalla de la Pi (tty1) desde SSH, igual que el servicio
+# (también con las variables de local/entorno, como la clave de OpenWeather).
 # Para el hormiguero mientras tanto y lo vuelve a lanzar al terminar (también con Ctrl+C).
 # Ejemplos:  ./en-pantalla.sh python3 hormiguero_fb.py --demo
 #            ./en-pantalla.sh python3 hormiguero_fb.py --fecha 2026-12-24 --hora 21:00
@@ -31,5 +32,6 @@ sudo systemd-run --wait --collect --quiet --unit=en-pantalla \
     -p User="$(id -un)" -p WorkingDirectory="$DIR" -p PAMName=login \
     -p TTYPath=/dev/tty1 -p TTYReset=yes -p TTYVHangup=yes -p StandardInput=tty \
     -p StandardOutput=truncate:"$LOG" -p StandardError=append:"$LOG" \
+    -p EnvironmentFile=-"$DIR/local/entorno" \
     -E PYTHONUNBUFFERED=1 \
     "$@"

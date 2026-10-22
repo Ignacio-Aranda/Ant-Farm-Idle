@@ -36,6 +36,15 @@ def zona_horaria(nombre):
         return None
 
 
+def sin_zonas_horarias():
+    """¿No tiene este ordenador la lista de zonas horarias? (en Windows, sin el paquete tzdata)"""
+    try:
+        from zoneinfo import available_timezones
+        return not available_timezones()
+    except Exception:
+        return True
+
+
 def ahora(zona=None):
     """La hora de ahora (sin zona): la de la ciudad si se da su zona horaria, o la del ordenador."""
     return datetime.datetime.now(zona_horaria(zona)).replace(tzinfo=None)

@@ -1,0 +1,2 @@
+# Los scripts de la Pi, siempre con finales de línea de Unix (también si se clona en Windows)
+*.sh text eol=lf

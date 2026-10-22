@@ -111,7 +111,11 @@ def _ruta_fuente():
               "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"):
         if os.path.exists(r):
             return r
-    return None
+    # en Windows o macOS, si está instalada (la letra de pygame no tiene la calavera ☠)
+    try:
+        return pygame.font.match_font("dejavusans", bold=True) or None
+    except Exception:
+        return None
 
 
 # Ajustes de los textos (config.toml, [general]): texto_aumento suma puntos a todos los

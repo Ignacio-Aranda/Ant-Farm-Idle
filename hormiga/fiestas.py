@@ -1,5 +1,6 @@
 """Fiestas y cumpleaños activos en una fecha."""
 
+import calendar
 import datetime
 
 from .tiempo import pascua
@@ -11,16 +12,20 @@ DECORACIONES = ("navidad", "nochevieja", "reyes", "halloween", "difuntos", "anda
 GORROS = ("fiesta", "papa_noel", "corona", "capirote", "bruja", "flor", "antifaz")
 
 
-def _fecha(espec, anio):
+def _fecha(espec, anio, fin=False):
     """La fecha de una fiesta ("DD-MM" o "pascua+N") en ese año. Si está mal escrita, también
-    con números enormes, ValueError."""
+    con números enormes, ValueError. Con fin (la de «hasta»), el 29-02 de un año que no lo
+    tiene es el 28: la fiesta no se pierde entera."""
     espec = str(espec).strip().lower().replace(" ", "")
     try:
         if espec.startswith("pascua"):
             resto = espec[6:] or "+0"
             return pascua(anio) + datetime.timedelta(days=int(resto))
         dia, mes = espec.replace("/", "-").split("-")  # formato español: DD-MM (o DD/MM)
-        return datetime.date(anio, int(mes), int(dia))
+        dia, mes = int(dia), int(mes)
+        if fin and (dia, mes) == (29, 2) and not calendar.isleap(anio):
+            dia = 28
+        return datetime.date(anio, mes, dia)
     except OverflowError:
         raise ValueError("fecha fuera de rango: %s" % espec) from None
 
@@ -37,9 +42,9 @@ class Fiesta:
 
     def rango(self, anio):
         a = _fecha(self.desde, anio)
-        b = _fecha(self.hasta, anio)
+        b = _fecha(self.hasta, anio, fin=True)
         if b < a:  # cruza el año
-            b = _fecha(self.hasta, anio + 1)
+            b = _fecha(self.hasta, anio + 1, fin=True)
         return a, b
 
     def activa(self, fecha):
@@ -88,8 +93,9 @@ def cargar(datos, avisos=None):
             continue
         if f.decoracion not in DECORACIONES:
             avisos.append("calendario: «%s»: no existe la decoración «%s»" % (f.nombre, f.decoracion))
-        if f.gorro and f.gorro not in GORROS:
+        if f.gorro and f.gorro not in GORROS:   # sin gorro: si no, taparía el de otra fiesta del mismo día
             avisos.append("calendario: «%s»: no existe el gorro «%s»" % (f.nombre, f.gorro))
+            f.gorro = None
         out.append(f)
     return out
 

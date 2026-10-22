@@ -14,6 +14,7 @@ de un nivel a otro por rampas (como en una granja de hormigas de verdad).
 
 import datetime
 import random
+import unicodedata
 from collections import deque
 
 from .tiempo import estacion
@@ -55,6 +56,14 @@ OBJETOS = [
     ("una moneda romana", "(R)", "naranja"),
     ("el IRPF fosilizado", "<IRPF<", "gris"),
 ]
+
+
+def clave_de(nombre):
+    """El nombre de una obra o de un tipo, para compararlo: en minúsculas, sin tildes y con «_»
+    en lugar de espacios o guiones ("Almacén" es "almacen"; "Sala de juegos", "sala_de_juegos")."""
+    t = unicodedata.normalize("NFD", str(nombre).strip().lower())
+    t = "".join(c for c in t if not unicodedata.combining(c))
+    return "_".join(t.replace("-", " ").replace("_", " ").split())
 
 
 class Sala:
@@ -471,12 +480,14 @@ class Plan:
         self.hondo = n + 1
         return True
 
-    def _salida(self, cavadas):
+    def _salida(self, cavadas, final):
         """(lejos, x, x2) de la segunda salida: sube desde la galería de la planta 1, junto a una
-        columna que ya esté en `cavadas`, hasta la superficie lo más lejos posible de la entrada."""
+        columna que ya esté en `cavadas`, hasta la superficie lo más lejos posible de la entrada.
+        final: lo que habrá cavado al acabar el año (como _cavado); con eso se mira que se pueda
+        subir por ella desde dentro (si empieza encima de una rampa que baja, puede quedar colgada)."""
         a, b = self.tramo[1]
         largo = 2 * PISOS[1]
-        mejor = None
+        candidatas = []
         for x in range(a, b + 1):
             if not any((x + dx, PISOS[1]) in cavadas for dx in (-1, 0, 1)):
                 continue
@@ -490,9 +501,37 @@ class Plan:
                        for s in self.salas_todas):
                     continue
                 lejos = abs(x2 - self.entrada)
-                if lejos > 24 and (mejor is None or lejos > mejor[0]):
-                    mejor = (lejos, x, x2)
-        return mejor
+                if lejos > 24:
+                    candidatas.append((lejos, x, x2))
+        # la más lejana a la que se sube andando desde la galería
+        for lejos, x, x2 in sorted(candidatas, key=lambda c: -c[0]):
+            if self._se_sube(rampa(x, PISOS[1], x2, 0), final):
+                return lejos, x, x2
+        return None
+
+    def _se_sube(self, celdas, final):
+        """¿Se llega desde dentro a todo el suelo de una salida (celdas), con lo cavado en final?
+        Se anda sólo por sus columnas y las de al lado, empezando por el suelo que no es suyo
+        (la galería y las rampas, a las que ya se llega) y sin salir a la superficie."""
+        guardado = getattr(self, "_cavado", None)
+        self._cavado = bytearray(final)
+        for x, y in celdas:
+            self._cavado[y * ANCHO + x] = 1
+        try:
+            xs = [x for x, _y in celdas]
+            lo, hi = min(xs) - 1, max(xs) + 1
+            suyas = set(celdas)
+            suelo = [(x, y) for x in range(lo, hi + 1) for y in range(PROF) if self.suelo_en(x, y)]
+            vistos = {c for c in suelo if c not in suyas}
+            cola = deque(vistos)
+            while cola:
+                for n in self._pasos(*cola.popleft(), vistos):
+                    if lo <= n[0] <= hi and n[1] >= 0:
+                        vistos.add(n)
+                        cola.append(n)
+            return all(c in vistos for c in suelo)
+        finally:
+            self._cavado = guardado
 
     def _montar_obras(self, dias):
         rng = self.rng
@@ -511,8 +550,8 @@ class Plan:
             hueco = self._hueco_obra(ancho)
             while hueco is None and self.hondo < len(PISOS) - 1 and self._bajar_planta(obras):
                 hueco = self._hueco_obra(ancho)
-            while hueco is None and ancho > max(14, minimo):
-                ancho = max(ancho - 4, minimo)
+            while hueco is None and ancho > max(ANCHO_MIN, minimo):
+                ancho = max(ancho - 4, ANCHO_MIN, minimo)
                 hueco = self._hueco_obra(ancho)
             if hueco is None:
                 self.sin_sitio.append(d["nombre"])
@@ -532,8 +571,12 @@ class Plan:
         # segunda salida: tras las primeras obras del año, desde un tramo de la galería de la
         # planta 1 que ya esté cavado cuando empiece (si no hay ninguno, más adelante)
         cavadas = set(self.obras[0].celdas)
+        final = bytearray(ANCHO * PROF)
+        for o in [self.obras[0]] + obras:
+            for x, y in o.celdas:
+                final[y * ANCHO + x] = 1
         for i in range(len(obras) + 1):
-            mejor = self._salida(cavadas) if i >= min(3, len(obras)) else None
+            mejor = self._salida(cavadas, final) if i >= min(3, len(obras)) else None
             if mejor:
                 _, x, x2 = mejor
                 obras.insert(i, Obra("salida", "una segunda salida", rampa(x, PISOS[1], x2, 0)))
@@ -590,7 +633,7 @@ class Plan:
             borde = [(x, y) for x, y in obra.celdas[-40:]]
             rng.shuffle(borde)
             for cx, cy in borde:
-                x, y = cx, cy - ALTO_GALERIA if (cx, cy - 1) in ocupado else cy + 1
+                x = cx
                 for dy in (-1, 1, -2, 2):
                     yy = cy + dy
                     celdas = [(x + i, yy) for i in range(len(icono))]

@@ -56,6 +56,7 @@ class Render:
         self.letras = Letras()
         self.rng = random.Random()
         self.G = m.oy * CH                      # línea del suelo en píxeles
+        self.bajar_pancarta = 0                 # con la franja de avisos arriba, el mensaje del cielo baja (pixel/app.py)
         self.capa_cielo = None
         self.clave_cielo = None
         self.capa_montes = None
@@ -392,7 +393,8 @@ class Render:
     def _clave_superficie(self):
         m = self.m
         return (m.ahora.date(), m.de_noche, frozenset(m.decoraciones), tuple(m.cumples), tuple(m.idos),
-                tuple(m.salidas_x), m.plan.total_cavado() // 600, m.llovio, m.llovio_semana, m.nevado)
+                tuple(m.salidas_x), m.plan.total_cavado() // 600, m.llovio, m.llovio_semana, m.nevado,
+                m.x_cumple)
 
     def _superficie(self):
         clave = self._clave_superficie()
@@ -518,6 +520,7 @@ class Render:
     def _cementerio(self, s, G):
         m = self.m
         self.cementerio_px = None   # de dónde a dónde va (en píxeles), para no taparlo
+        m.zona_cementerio = None    # y en columnas del plano, para que la tarta no lo tape (mundo.py)
         m.avisos_dibujo[("cementerio",)] = []
         if not m.idos:
             return
@@ -557,9 +560,11 @@ class Render:
                                                 "(no salen %s)" % ", ".join(fuera)]
         if total > mayor:
             return
-        pref = min(m.superficie.cementerio_x, m.plan_ancho - total - 2)
+        # cementerio_x va en columnas de la pantalla; los huecos, en las del plano
+        pref = min(m.superficie.cementerio_x - m.ox, m.plan_ancho - total - 2)
         x = min((x0 for a, b in huecos for x0 in range(a, b - total + 1)), key=lambda x0: abs(x0 - pref))
-        x0 = self.px(x)
+        m.zona_cementerio = (x, x + total)
+        x0 = self.px(m.ox + x)
         # valla
         ancho_px = self.px(total)
         self.cementerio_px = (x0, x0 + ancho_px)
@@ -697,7 +702,6 @@ class Render:
             self._pintar_salas()
 
     def _pintar_tierra_entera(self):
-        s = self.capa_tierra
         for gy in range(PROF):
             for gx in range(ANCHO):
                 self._pintar_celda(gx, gy)
@@ -925,6 +929,7 @@ class Render:
         self._nubes()
         self._fuegos_y_cielo_fiesta(t)
         self._montes()
+        self._fondo_vivo(t)
         self._superficie()
         self._hierba(t)
         self._superficie_viva(t)
@@ -941,6 +946,15 @@ class Render:
 
     # ---------------------------------------------------------------- vivos de superficie
 
+    def _fondo_vivo(self, t):
+        """Lo que se mueve al fondo (el haz del faro, las aspas del molino): encima de los montes y
+        de su construcción, pero detrás de lo que hay en la superficie (una casa, un árbol...)."""
+        m = self.m
+        for k, (pieza, x) in enumerate(m.superficie.piezas_fondo):
+            animar = PA.FONDO.get(pieza, (None, None))[1]
+            if animar:
+                animar(self.dst, self.px(x), self._base_fondo(x), PA.Contexto(0, m.semilla, m.de_noche, k), t)
+
     def _superficie_viva(self, t):
         m = self.m
         dst = self.dst
@@ -953,11 +967,6 @@ class Render:
             for x in sup.farolas:
                 fx = self.px(x)
                 dst.blit(self.halo_farola, (fx - 40, G - 80), special_flags=pygame.BLEND_ADD)
-        # lo que se mueve al fondo (el faro, las aspas del molino)
-        for k, (pieza, x) in enumerate(sup.piezas_fondo):
-            animar = PA.FONDO.get(pieza, (None, None))[1]
-            if animar:
-                animar(dst, self.px(x), self._base_fondo(x), PA.Contexto(0, m.semilla, noche, k), t)
         # búho
         if sup.buho_x is not None and noche and m.lluvia == 0 and \
                 random.Random("buho-%s" % m.ahora.date()).random() < 0.6:
@@ -986,8 +995,6 @@ class Render:
         # portada de feria con bombillas
         if "feria" in deco:
             self._portada(t)
-        if "feria" in deco or "banderines" in deco or "andalucia" in deco or "carnaval" in deco:
-            pass
         if "san_juan" in deco and noche:
             hx = self.px(m.salidas_x[0]) + 60
             for k in range(14):
@@ -1483,13 +1490,20 @@ class Render:
                 self._pancarta_clave = clave
                 self._pancarta_img = [reloj_grande("FELIZ CUMPLE", c, 3) for c in COLORES_FIESTA[:4]]
             img = self._pancarta_img[int(t * 2) % 4]
-            dst.blit(img, (self.W // 2 - img.get_width() // 2, 48))
-            nombres = ", ".join(m.cumples)
-            txt = self.letras.texto(nombres if len(nombres) < 90 else nombres[:87] + "...", (255, 240, 150), 10)
-            dst.blit(txt, (self.W // 2 - txt.get_width() // 2, 70))
+            dst.blit(img, (self.W // 2 - img.get_width() // 2, 48 + self.bajar_pancarta))
+            nombres = self.letras.recortar(", ".join(m.cumples), self.W - 9, 10)
+            txt = self.letras.texto(nombres, (255, 240, 150), 10)
+            dst.blit(txt, (self.W // 2 - txt.get_width() // 2, 70 + self.bajar_pancarta))
         elif m.fiesta_mensaje:
-            txt = self.letras.texto(m.fiesta_mensaje, (255, 236, 120), 11)
-            dst.blit(txt, (self.W // 2 - txt.get_width() // 2, 44))
+            # que quepa en la pantalla: con letra más pequeña y, si ni así, recortado con «…»
+            mensaje, cabe = m.fiesta_mensaje, self.W - 8
+            for tam in (11, 10, 9):
+                if self.letras.fuente(tam).size(mensaje)[0] + 1 <= cabe:
+                    break
+            else:
+                mensaje = self.letras.recortar(mensaje, cabe - 1, tam)
+            txt = self.letras.texto(mensaje, (255, 236, 120), tam)
+            dst.blit(txt, (self.W // 2 - txt.get_width() // 2, 44 + self.bajar_pancarta))
 
     def _textos_hud(self):
         """Los textos de arriba a la izquierda: [(imagen, posición)]."""

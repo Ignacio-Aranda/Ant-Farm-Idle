@@ -6,6 +6,8 @@ import random
 from motor.colores import color
 from motor.sprites import construir, lineas, mascara_lineas, pintor_fijo
 
+from .app import si_no
+
 # Lo que hay en la superficie si config.toml no dice nada (x en % del ancho)
 SUELO_DEFECTO = [{"pieza": "chumbera", "x": 2}, {"pieza": "palmera", "x": 30}, {"pieza": "farola", "x": 42},
                  {"pieza": "olivo", "x": 49}, {"pieza": "almendro", "x": 89}]
@@ -124,20 +126,63 @@ class Superficie:
                         for _ in range(W // 16)]
 
     def _leer_paisaje(self, p, W):
-        """[paisaje] de config.toml. Las x vienen en % del ancho y aquí pasan a columnas."""
-        def piezas(lista):
+        """[paisaje] de config.toml. Las x vienen en % del ancho y aquí pasan a columnas. Lo que
+        está mal escrito no tumba el hormiguero: se avisa y se usa lo de por defecto."""
+        avisos = self.m.avisos
+        p = p if isinstance(p, dict) else {}
+        generales = ("montes", "costa", "cementerio")
+        for k in p:
+            if k not in generales + ("suelo", "fondo"):
+                avisos.append("paisaje: no conozco «%s» (no lo tengo en cuenta)" % k)
+
+        def piezas(clave, defecto):
+            lista = p.get(clave, defecto)
+            if isinstance(lista, dict):   # [paisaje.suelo] en vez de [[paisaje.suelo]]: cuenta como una
+                avisos.append("paisaje: escribe [[paisaje.%s]], con dos corchetes (con uno sólo cabe una pieza)"
+                              % clave)
+                lista = [lista]
+            elif not isinstance(lista, list):
+                avisos.append("paisaje: %s mal escrito (%s), usa [[paisaje.%s]] (puse el de siempre)"
+                              % (clave, lista, clave))
+                lista = defecto
             out = []
             for d in lista:
+                pieza = d.get("pieza") if isinstance(d, dict) else None
+                x = d.get("x", 50) if isinstance(d, dict) else None
                 try:
-                    out.append((str(d["pieza"]).lower(), int(max(0.0, min(100.0, float(d.get("x", 50)))) / 100 * (W - 1))))
-                except (KeyError, TypeError, ValueError):
-                    self.m.avisos.append("paisaje: pieza mal escrita (%s)" % d)
+                    if not isinstance(pieza, str) or not pieza.strip() or isinstance(x, bool):
+                        raise ValueError
+                    x = float(x.strip().replace(",", ".") if isinstance(x, str) else x)
+                    if not math.isfinite(x):
+                        raise ValueError
+                except (TypeError, ValueError, OverflowError):
+                    avisos.append("paisaje: pieza mal escrita (%s)" % d)
+                    continue
+                pieza = pieza.strip().lower()
+                for k in d:
+                    if k in generales:   # escrita debajo de una pieza, TOML la mete en ella
+                        avisos.append("paisaje: «%s» está dentro de una pieza (%s) y [paisaje] no lo ve; "
+                                      "ponlo arriba, antes de la primera [[paisaje...]]" % (k, pieza))
+                    elif k not in ("pieza", "x"):
+                        avisos.append("paisaje: %s: no conozco «%s» (no lo tengo en cuenta)" % (pieza, k))
+                out.append((pieza, int(max(0.0, min(100.0, x)) / 100 * (W - 1))))
             return out
-        self.piezas_suelo = piezas(p.get("suelo", SUELO_DEFECTO))
-        self.piezas_fondo = piezas(p.get("fondo", FONDO_DEFECTO))
-        self.montes_lejos = bool(p.get("montes", True))
-        self.costa = bool(p.get("costa", True))
-        self.cementerio_x = int(max(0.0, min(100.0, float(p.get("cementerio", 74)))) / 100 * (W - 1))
+
+        def sino(clave, defecto):
+            v = si_no(p.get(clave, defecto))
+            if v is None:
+                avisos.append("paisaje: %s debe ser true o false (puse %s)" % (clave, "true" if defecto else "false"))
+                return defecto
+            return v
+        self.piezas_suelo = piezas("suelo", SUELO_DEFECTO)
+        self.piezas_fondo = piezas("fondo", FONDO_DEFECTO)
+        self.montes_lejos = sino("montes", True)
+        self.costa = sino("costa", True)
+        try:   # ya viene comprobado al cargar (hormiga/app.py)
+            cementerio = max(0.0, min(100.0, float(p.get("cementerio", 74))))
+        except (TypeError, ValueError, OverflowError):
+            cementerio = 74.0
+        self.cementerio_x = int(cementerio / 100 * (W - 1))
         def primera(*nombres):
             return next((x for n in nombres for pieza, x in self.piezas_suelo if pieza == n), None)
         self.arbol_x = primera("almendro")                       # flores, hojas y almendras
@@ -207,7 +252,7 @@ class Superficie:
         if "corazones" in deco and rng.random() < dt * 0.8:
             self.particulas.append([rng.uniform(0, W), m.suelo_y - 1, rng.uniform(-0.5, 0.5), -1.5,
                                     "♥", color("R"), 8])
-        if "nochevieja" in deco and m.de_noche and rng.random() < dt * 0.7:
+        if "nochevieja" in deco and m.de_noche and m.lluvia == 0 and rng.random() < dt * 0.7:
             self._fuego_artificial()
         for p in self.particulas:
             p[0] += p[2] * dt

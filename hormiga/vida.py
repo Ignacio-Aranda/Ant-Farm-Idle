@@ -119,8 +119,9 @@ class Vida:
             clave = rng.choices([o for o, _ in opciones], [w for _, w in opciones])[0]
             nombre, arte, col, peso = COMIDAS[clave]
             x = rng.uniform(6, W - 8)
+            # las piezas del paisaje van en columnas de la pantalla; las cosas, en las del plano
             if clave == "higo":
-                x = max(1, m.superficie.chumbera_x + rng.uniform(-4, 6))
+                x = max(1, m.superficie.chumbera_x - m.ox + rng.uniform(-4, 6))
             elif clave == "almendra":
                 x = m.superficie.arbol_x - m.ox + rng.uniform(-7, 7)
             c = Cosa("comida", clave, nombre, x, arte, col, peso)

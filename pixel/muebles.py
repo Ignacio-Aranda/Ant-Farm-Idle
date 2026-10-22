@@ -156,10 +156,19 @@ def vitrina(s, x, suelo, r, c):
     estanteria(s, x, suelo, r, c, libros=False)
     m = c.render.m
     hallados = [o for o in m.plan.objetos if o[5] <= m.dia_obras]
-    for i, (_x, _y, nombre, _icono, col, _d) in enumerate(hallados[c.indice * 6:c.indice * 6 + 6]):
-        ex = x + 3 + (i % 2) * 9
-        yy = suelo - 27 + (i // 2) * 9
-        c.render._objeto(s, ex, yy, nombre, rgb(col))
+    i = 0
+    encima = suelo - 31   # lo que no cabe en un hueco del estante va encima de la vitrina
+    for _x, _y, nombre, _icono, col, _d in hallados[c.indice * 6:c.indice * 6 + 6]:
+        # se pinta aparte para medirlo: el IRPF fosilizado (con su letrero) no cabe en un hueco
+        img = pygame.Surface((80, 30), pygame.SRCALPHA)
+        c.render._objeto(img, 4, 4, nombre, rgb(col))
+        caja = img.get_bounding_rect()
+        if caja.width > 11:
+            encima -= caja.height
+            s.blit(img, (x + (22 - caja.width) // 2, encima), caja)
+            continue
+        c.render._objeto(s, x + 3 + (i % 2) * 9, suelo - 27 + (i // 2) * 9, nombre, rgb(col))
+        i += 1
 
 
 def sacos(s, x, suelo, r, c):
@@ -266,9 +275,20 @@ def revisar(muebles, donde, avisos):
     (la pieza va a su sitio de siempre) y uno fuera de 0-100 se deja en el borde."""
     huecos = {**HUECOS_SUELO, **HUECOS_PARED}
     for mu in muebles:
-        pieza = str(mu.get("pieza", "")).lower()
+        pieza = str(mu.get("pieza", "")).strip().lower()
         if pieza not in PIEZAS:
             avisos.append("%s: no existe la pieza «%s»" % (donde, pieza))
+        else:
+            mu["pieza"] = pieza
+        if "aparece" in mu:   # el día en que aparece: un número de días (si no, desde el principio)
+            try:
+                if isinstance(mu["aparece"], bool):
+                    raise ValueError
+                mu["aparece"] = int(float(str(mu["aparece"]).strip().replace(",", ".")))
+            except (TypeError, ValueError, OverflowError):
+                avisos.append("%s: aparece de %s debe ser un número de días (%s; puse 0)"
+                              % (donde, pieza, mu["aparece"]))
+                mu["aparece"] = 0
         sitio = mu.get("sitio")
         if sitio is None:
             continue

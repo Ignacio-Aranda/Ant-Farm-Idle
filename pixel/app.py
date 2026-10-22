@@ -31,27 +31,92 @@ def tus_datos(nombre):
     return propio if os.path.exists(propio) else os.path.join(RAIZ, nombre)
 
 
+# los mensajes de argparse que salen en inglés, en español
+INGLES = (("unrecognized arguments", "no conozco estas opciones"), ("expected one argument", "falta su valor"),
+          ("invalid choice", "no vale"), ("choose from", "elige entre"), ("invalid float value", "no es un número"),
+          ("invalid int value", "no es un número entero"), ("argument ", "opción "),
+          ("the following arguments are required", "faltan estas opciones"), ("ignored explicit argument",
+                                                                                "esta opción no lleva valor"))
+
+
+class Formato(argparse.HelpFormatter):
+    def add_usage(self, usage, actions, groups, prefix=None):
+        return super().add_usage(usage, actions, groups, "uso: ")
+
+
+class Opciones(argparse.ArgumentParser):
+    """argparse, con la ayuda y los errores en español."""
+
+    def __init__(self, **k):
+        super().__init__(formatter_class=Formato, add_help=False, **k)
+        self._optionals.title = "opciones"
+        self.add_argument("-h", "--help", action="help", help="enseña esta ayuda y sale")
+
+    def error(self, mensaje):
+        for ingles, espanol in INGLES:
+            mensaje = mensaje.replace(ingles, espanol)
+        self.print_usage(sys.stderr)
+        self.exit(2, "%s: error: %s\n" % (self.prog, mensaje))
+
+
+def _fecha(texto):
+    try:
+        return datetime.date.fromisoformat(texto.strip()).isoformat()
+    except ValueError:
+        raise argparse.ArgumentTypeError("«%s» no es una fecha: escríbela así, 2026-12-24" % texto) from None
+
+
+def _hora(texto):
+    try:
+        h, m = (int(v) for v in texto.strip().split(":"))
+    except ValueError:
+        h = m = -1
+    if not (0 <= h <= 23 and 0 <= m <= 59):
+        raise argparse.ArgumentTypeError("«%s» no es una hora: escríbela así, 21:00 (de 00:00 a 23:59)" % texto)
+    return "%02d:%02d" % (h, m)
+
+
+def _numero(texto):
+    try:
+        return float(texto)
+    except ValueError:
+        raise argparse.ArgumentTypeError("«%s» no es un número (los decimales, con punto: 0.5)" % texto) from None
+
+
+def _entero(texto):
+    try:
+        return int(texto)
+    except ValueError:
+        raise argparse.ArgumentTypeError("«%s» no es un número entero" % texto) from None
+
+
 def argumentos(argv=None):
-    p = argparse.ArgumentParser(prog="hormiguero_pixel", description="Ant Farm Idle (pixel art).")
-    p.add_argument("-c", "--config", default=tus_datos("config.toml"))
-    p.add_argument("--salas", default=tus_datos("salas"))
-    p.add_argument("--tipos", default=tus_datos("tipos"))
-    p.add_argument("--idos", default=tus_datos("idos.toml"))
-    p.add_argument("--calendario", default=tus_datos("calendario.toml"))
-    p.add_argument("--fecha")
-    p.add_argument("--hora")
-    p.add_argument("--dias", type=float)
-    p.add_argument("--acelerar", type=float, default=1.0)
-    p.add_argument("--demo", action="store_true")
-    p.add_argument("--seg-dia", type=float, default=4.0)
-    p.add_argument("--pausa", type=float, default=5.0)
-    p.add_argument("--semilla", type=int)
+    p = Opciones(prog="hormiguero_pixel", description="Ant Farm Idle: un hormiguero en pixel art.")
+    p.add_argument("-c", "--config", default=tus_datos("config.toml"), metavar="RUTA",
+                   help="fichero de configuración (por defecto, local/config.toml o config.toml)")
+    p.add_argument("--salas", default=tus_datos("salas"), metavar="RUTA", help="carpeta de las salas")
+    p.add_argument("--tipos", default=tus_datos("tipos"), metavar="RUTA", help="carpeta de los tipos de sala")
+    p.add_argument("--idos", default=tus_datos("idos.toml"), metavar="RUTA", help="fichero de los que se fueron")
+    p.add_argument("--calendario", default=tus_datos("calendario.toml"), metavar="RUTA",
+                   help="fichero de las fiestas")
+    p.add_argument("--fecha", type=_fecha, metavar="AAAA-MM-DD", help="empieza ese día")
+    p.add_argument("--hora", type=_hora, metavar="HH:MM", help="empieza a esa hora")
+    p.add_argument("--dias", type=_numero, metavar="N", help="empieza N días después de la fundación")
+    p.add_argument("--acelerar", type=_numero, default=1.0, metavar="N", help="el reloj va N veces más deprisa")
+    p.add_argument("--demo", action="store_true", help="un año entero a toda velocidad")
+    p.add_argument("--seg-dia", type=_numero, default=4.0, metavar="N",
+                   help="en la demo, segundos que dura cada día (como mínimo 0.2)")
+    p.add_argument("--pausa", type=_numero, default=5.0, metavar="N",
+                   help="en la demo, segundos que se para en cada fecha importante")
+    p.add_argument("--semilla", type=_entero, metavar="N", help="otra semilla: otra colocación de salas y túneles")
     p.add_argument("--tiempo", choices=("despejado", "nublado", "lluvia", "tormenta", "nieve", "calima"),
                    help="forzar el tiempo (para probar o hacer capturas)")
-    p.add_argument("--fps", type=float, default=None, help="fotogramas por segundo (por defecto 20)")
+    p.add_argument("--fps", type=_numero, default=None, metavar="N",
+                   help="fotogramas por segundo (por defecto, fps_pixel de config.toml)")
     p.add_argument("--ventana", action="store_true", help="en ventana en vez de pantalla completa")
     p.add_argument("--captura", metavar="PNG", help="sin pantalla: simula y guarda una imagen")
-    p.add_argument("--segundos", type=float, default=10)
+    p.add_argument("--segundos", type=_numero, default=10, metavar="N",
+                   help="con --captura o --medir, segundos que se simulan")
     p.add_argument("--medir", action="store_true", help="sin pantalla: mide cuánto tarda cada fotograma")
     return p.parse_args(argv)
 
@@ -137,6 +202,45 @@ def firma(args):
     return A.firma(args)
 
 
+def para_reiniciar(args, salas):
+    """Lo que sólo se aplica al reiniciar: config.toml y tipos/ tal como están escritos (sin los
+    comentarios) y, de cada sala, su nombre, color, planta, x, ancho y tipo."""
+    from motor.sprites import cargar_toml
+
+    def leer(ruta):
+        try:
+            return cargar_toml(ruta)
+        except Exception as e:   # también si no existe
+            return str(e)
+    tipos = {}
+    if os.path.isdir(args.tipos):
+        tipos = {n: leer(os.path.join(args.tipos, n)) for n in sorted(os.listdir(args.tipos))
+                 if n.endswith(".toml") and not n.startswith(".")}
+    plano = {s["fichero"]: tuple(s.get(k) for k in ("nombre", "color", "planta", "x", "ancho", "tipo"))
+             for s in salas}
+    return leer(args.config), tipos, plano
+
+
+def avisos_de_reinicio(antes, ahora):
+    """Avisos de lo que ha cambiado en los ficheros y no se ve hasta reiniciar (si no, al quitarse
+    el aviso de una errata parecería que ya está arreglada)."""
+    (cfg0, tipos0, plano0), (cfg1, tipos1, plano1) = antes, ahora
+    out = []
+    if cfg1 != cfg0:
+        out.append("config.toml ha cambiado: reinicia el hormiguero para aplicarlo")
+    if tipos1 != tipos0:
+        out.append("tipos/ ha cambiado: reinicia el hormiguero para aplicarlo")
+    for f in sorted(set(plano0) | set(plano1)):
+        if f not in plano0:
+            out.append("%s es nueva: la sala sale al reiniciar el hormiguero (su gente, mientras, en otra)" % f)
+        elif f not in plano1:
+            out.append("%s ya no está: su sala se quita al reiniciar el hormiguero" % f)
+        elif plano0[f] != plano1[f]:
+            out.append("%s: el nombre, el color, la planta, x, el ancho y el tipo de la sala se aplican al "
+                       "reiniciar el hormiguero" % f)
+    return out
+
+
 def con_pantalla(args):
     import pygame
     A, cfg, salas, idos, fiestas, avisos = preparar(args)
@@ -153,10 +257,11 @@ def con_pantalla(args):
     from hormiga.mundo import Mundo
     from .render import Render
     reloj = A.crear_reloj(args, cfg, fiestas, salas, idos)
+    inicial = para_reiniciar(args, salas)
     m = Mundo(cfg, salas, idos, fiestas, PantallaNula(), reloj, avisos)
     if args.demo:
         m.contexto_cada = 0.25
-        m.demo_texto = "DEMO · semilla %s · un día cada %g s" % (cfg["general"]["semilla"], args.seg_dia)
+        m.demo_texto = "DEMO · semilla %s · un día cada %g s" % (cfg["general"]["semilla"], max(0.2, args.seg_dia))
     r = Render(m, pantalla)
     fps = args.fps or float(cfg["general"].get("fps_pixel", 20))
     clock = pygame.time.Clock()
@@ -184,11 +289,11 @@ def con_pantalla(args):
                 if nueva != huella:
                     huella = nueva
                     # se rehacen los avisos de los ficheros (y, al repintar las salas, los de sus
-                    # muebles); los del trazado se quedan
+                    # muebles); los del trazado se quedan. Lo que sólo vale al reiniciar, se avisa
                     nuevos = []
                     try:
                         _cfg, salas, idos, fiestas = cargar(A, args, nuevos)
-                        m.avisos_carga = nuevos
+                        m.avisos_carga = nuevos + avisos_de_reinicio(inicial, para_reiniciar(args, salas))
                         m.fiestas = fiestas
                         m.cargar_gente(salas, idos)
                         m.actualizar_contexto(forzar=True)
@@ -200,17 +305,21 @@ def con_pantalla(args):
             t0 = time.perf_counter()
             m.paso(dt)
             t1 = time.perf_counter()
+            avisos = m.todos_los_avisos()
+            r.bajar_pancarta = 14 if avisos else 0   # el mensaje del cielo, debajo de la franja
             r.dibujar()
             t2 = time.perf_counter()
             medias[0] = medias[0] * 0.95 + (t1 - t0) * 50
             medias[1] = medias[1] * 0.95 + (t2 - t1) * 50
+            y = 44   # debajo de la fecha: la franja de avisos y, debajo, lo de la tecla «i»
+            if avisos:   # recortada a lo que cabe en la pantalla, con «…» si sigue
+                texto = r.letras.recortar("Avisos: " + "; ".join(avisos), pantalla.get_width() - 16, 9)
+                img = r.letras.texto(texto, (30, 30, 30), 9, fondo=(255, 225, 90))
+                pantalla.blit(img, (6, y))
+                y += img.get_height() + 2
             if info:
                 txt = "%.0f fps · simulación %.1f ms · dibujo %.1f ms" % (clock.get_fps(), medias[0], medias[1])
-                pantalla.blit(r.letras.texto(txt, (255, 255, 160), 9, fondo=(20, 20, 20)), (6, 44))
-            avisos = m.todos_los_avisos()
-            if avisos:
-                pantalla.blit(r.letras.texto("Avisos: " + "; ".join(avisos)[:120], (30, 30, 30), 9,
-                                             fondo=(255, 225, 90)), (6, 44))
+                pantalla.blit(r.letras.texto(txt, (255, 255, 160), 9, fondo=(20, 20, 20)), (6, y))
             pygame.display.flip()
 
     finally:

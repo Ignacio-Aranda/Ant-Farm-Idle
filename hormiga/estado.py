@@ -13,10 +13,13 @@ arranque, para que reiniciar la Pi o el servicio no cambie nada:
   - obras: con [nido] cavar = "encendido", las obras sólo avanzan mientras el hormiguero
     está en marcha. Se guarda cuánto llevan cavando (en días) y qué día del hormiguero
     se terminó cada obra (para el diario). Una semana apagado, una semana sin obras.
+  - cavar: el modo de cavar de la última vez, para seguir igual si config.toml no se
+    puede leer (si no, con "fecha" se vería de golpe recién fundado).
 """
 
 import datetime
 import json
+import math
 import os
 import random
 import time
@@ -33,23 +36,36 @@ def _tabla(v):
     return v if isinstance(v, dict) else {}
 
 
-def _leer(r):
+def _numero(v):
+    """Un número guardado (los días cavando); si no lo es (fichero editado a mano o dañado), 0."""
     try:
-        with open(r) as f:
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v):
+            return float(v)
+    except OverflowError:   # un entero enorme
+        pass
+    return 0.0
+
+
+def _leer(r):
+    try:   # siempre en UTF-8: así vale el mismo fichero en Windows y en la Pi
+        with open(r, encoding="utf-8") as f:
             return _tabla(json.load(f))
     except (OSError, ValueError):
         return {}
 
 
 def _escribir(r, datos):
+    tmp = r + ".tmp"
     try:
         os.makedirs(os.path.dirname(r), exist_ok=True)
-        tmp = r + ".tmp"
-        with open(tmp, "w") as f:
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(datos, f, ensure_ascii=False, indent=1)
         os.replace(tmp, r)
-    except OSError:
-        pass
+    except (OSError, ValueError):   # ValueError: un nombre que no se puede escribir (UnicodeError)
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
 
 
 def _hormigueros(datos):
@@ -110,14 +126,17 @@ class Estado:
         self.ruta = ruta(raiz)
         datos = _leer(self.ruta)
         self.inicio = _tabla(datos.get("inicio"))
-        self.colores = dict(_tabla(datos.get("colores")))
+        # lo que no tiene la forma de siempre (fichero editado a mano o dañado) no se tiene en cuenta
+        self.colores = {k: v for k, v in _tabla(datos.get("colores")).items() if isinstance(v, str)}
         self.fundacion, self.semilla = str(fundacion), semilla
         self.clave = "%s-%s" % (fundacion, semilla)
         mio = _hormigueros(datos).get(self.clave, {})
         obras = _tabla(mio.get("obras"))
-        self.dias = float(obras.get("dias", 0.0))      # tiempo cavando, en días
-        self.acabadas = dict(_tabla(obras.get("acabadas")))
-        self.posiciones = dict(_tabla(mio.get("posiciones")))
+        self.dias = _numero(obras.get("dias", 0.0))    # tiempo cavando, en días
+        self.acabadas = {k: int(v) for k, v in _tabla(obras.get("acabadas")).items() if _numero(v) == v}
+        self.posiciones = {k: v for k, v in _tabla(mio.get("posiciones")).items()
+                           if isinstance(v, list) and len(v) == 2 and all(_numero(c) == c for c in v)}
+        self.cavar = mio.get("cavar") if mio.get("cavar") in ("encendido", "fecha") else None
         self._ultimo = None
         self._guardado = time.monotonic()
 
@@ -158,6 +177,8 @@ class Estado:
         hs[self.clave] = {"fundacion": self.fundacion, "semilla": self.semilla,
                           "obras": {"dias": self.dias, "acabadas": self.acabadas},
                           "posiciones": self.posiciones}
+        if self.cavar:
+            hs[self.clave]["cavar"] = self.cavar
         colores = dict(_tabla(datos.get("colores")))
         colores.update(self.colores)
         _escribir(self.ruta, {"inicio": _tabla(datos.get("inicio")) or self.inicio, "colores": colores,

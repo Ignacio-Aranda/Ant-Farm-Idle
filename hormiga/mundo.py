@@ -12,10 +12,22 @@ from .estado import Estado
 from .hormigas import COLORES, Hormiga
 from .superficie import Superficie
 from .vida import Vida
-from .tierra import ANCHO, OBRAS, PROF, Plan
+from .tierra import ANCHO, OBRAS, PROF, Plan, clave_de
+
+# cómo se llama cada pieza en el diario («Novedad en Despacho: una planta.»)
+PIEZAS_DIARIO = {"escritorio": "un escritorio", "escritorio_grande": "un escritorio grande",
+                 "sillon": "un sillón", "sofa": "un sofá", "planta": "una planta",
+                 "mesa_reuniones": "una mesa de reuniones", "mesa_comedor": "una mesa de comedor",
+                 "nevera": "una nevera", "encimera": "una encimera con cafetera", "fuente": "una fuente de agua",
+                 "estanteria": "una estantería", "vitrina": "una vitrina", "sacos": "unos sacos",
+                 "cajas": "unas cajas", "setas": "unas setas", "cuadro": "un cuadro", "pantalla": "una pantalla",
+                 "pizarra": "una pizarra", "reloj": "un reloj"}
 
 
 def _fecha(v):
+    """Una fecha "AAAA-MM-DD" (o de TOML, también con hora) como date; si no, ValueError."""
+    if isinstance(v, datetime.datetime):   # 2026-03-01T09:00:00 sin comillas: vale el día
+        return v.date()
     if isinstance(v, datetime.date):
         return v
     return datetime.date.fromisoformat(str(v).strip())
@@ -37,12 +49,22 @@ class Mundo:
         self.clima = False   # se crea al primer uso (y sólo si el reloj va en hora)
         self.semilla = cfg["general"]["semilla"]
         nombre = str(cfg["general"].get("nombre", "")).strip()
-        self.de_quien = " de %s" % nombre if nombre else ""
+        if nombre[:3].lower() == "el ":   # «de el Taller» -> «del Taller»
+            nombre = nombre[3:].strip()
+            self.de_quien = " del %s" % nombre if nombre else ""
+        else:
+            self.de_quien = " de %s" % nombre if nombre else ""
         self.fundacion = _fecha(cfg["general"]["fundacion"])
         # lo que sobrevive a los reinicios (local/estado.json); sólo con el reloj de verdad,
         # nunca en la demo, con otra fecha ni al hacer capturas
         self.estado = Estado(self.raiz, self.fundacion.isoformat(), self.semilla) \
             if getattr(reloj, "real", False) else None
+        if self.estado is not None:   # cavar: si config.toml no se puede leer, como la última vez
+            nido = cfg.setdefault("nido", {})
+            if not cfg.get("config_ilegible"):
+                self.estado.cavar = "fecha" if str(nido.get("cavar", "encendido")).lower() == "fecha" else "encendido"
+            elif self.estado.cavar:
+                nido["cavar"] = self.estado.cavar
         self.fiestas = fiestas
         self.t = 0.0
         self.contexto_cada = 1.0
@@ -53,13 +75,15 @@ class Mundo:
         nido = cfg.get("nido", {})
         self.tipos = cfg.get("tipos", {})
         nombres_obras = nido.get("obras")
-        obras = OBRAS
-        if nombres_obras is not None:
-            por_clave = {o["clave"]: o for o in OBRAS}
-            obras = [por_clave.get(str(n).lower(), {"clave": str(n).lower(), "nombre": str(n), "ancho": 22})
+        obras = [dict(o) for o in OBRAS]
+        if nombres_obras is not None:   # sin mirar mayúsculas, tildes ni espacios ("Almacén" es almacen)
+            por_clave = {clave_de(o["clave"]): o for o in OBRAS}
+            obras = [dict(por_clave.get(clave_de(n)) or {"clave": clave_de(n), "nombre": str(n).strip(), "ancho": 22})
                      for n in nombres_obras]
+        tipo_de = {clave_de(t): t for t in self.tipos}   # el tipo de cada obra, el de su nombre
         for o in obras:
-            tipo = self.tipos.get(o.get("tipo", o["clave"]), {})
+            o["tipo"] = tipo_de.get(clave_de(o.get("tipo", o["clave"])), o.get("tipo", o["clave"]))
+            tipo = self.tipos.get(o["tipo"], {})
             o["funcion"] = tipo.get("funcion", "otra")
             o["minimo"] = tipo.get("ancho_minimo", 0)   # lo que necesitan sus muebles (lo pone pixel/app.py)
         sur = float(cfg.get("ciudad", {}).get("lat", T.MALAGA[0])) < 0
@@ -82,7 +106,8 @@ class Mundo:
                 try:
                     q["alta"] = _fecha(q["alta"]) if q.get("alta") else None
                 except ValueError:
-                    self.avisos_carga.append("%s: fecha de alta mal escrita" % q["nombre"])
+                    self.avisos_carga.append("%s: %s: fecha de alta mal escrita (%s), usa AAAA-MM-DD"
+                                             % (s.get("fichero", "salas"), q["nombre"], q["alta"]))
                     q["alta"] = None
                 self.personas.append(q)
         self.idos_cfg = []
@@ -92,7 +117,8 @@ class Mundo:
             try:
                 q["fecha"] = _fecha(q["fecha"]) if q.get("fecha") else None
             except ValueError:
-                self.avisos_carga.append("%s: fecha de baja mal escrita" % q["nombre"])
+                self.avisos_carga.append("idos.toml: %s: fecha mal escrita (%s), usa AAAA-MM-DD"
+                                         % (q["nombre"], q["fecha"]))
                 q["fecha"] = None
             self.idos_cfg.append(q)
         # las hormigas no se vuelven a crear: actualizar_contexto quita a quien ya no está,
@@ -100,9 +126,11 @@ class Mundo:
         self._diario_dia = None
 
     def todos_los_avisos(self):
-        """Los avisos de los ficheros, los de idos.toml, y los del trazado y el dibujo, sin repetir."""
+        """Los avisos de los ficheros, los de idos.toml, los del trazado y el dibujo y el del
+        tiempo real (si OpenWeather no acepta la clave), sin repetir."""
         dibujo = [a for avisos in self.avisos_dibujo.values() for a in avisos]
-        return list(dict.fromkeys(self.avisos_carga + self.avisos + self.avisos_gente + dibujo))
+        tiempo = [a for a in [self.clima and self.clima.aviso()] if a]
+        return list(dict.fromkeys(self.avisos_carga + self.avisos + self.avisos_gente + dibujo + tiempo))
 
     # -------------------------------------------------------------- montaje
 
@@ -149,7 +177,8 @@ class Mundo:
         e.avanzar(self.ahora)
         for i, o in enumerate(self.plan.obras):   # apunta qué día se termina cada obra (para el diario)
             if o.ini >= 0 and o.fin <= e.dias and e.acabar("%d %s" % (i, o.nombre), self.dia):
-                e.guardar(self.hormigas.values())
+                # al arrancar aún no hay hormigas: se guarda sin tocar dónde estaba cada una
+                e.guardar(self.hormigas.values() if self.hormigas else None)
         return e.dias
 
     def actualizar_contexto(self, forzar=False):
@@ -179,7 +208,9 @@ class Mundo:
         natural = hoy + datetime.timedelta(days=182) if lat < 0 else hoy
         self.dia_natural, self.mes_natural = natural.timetuple().tm_yday, natural.month
         if forzar or int(self.t) % 30 == 0:
-            if real:
+            if forzado:   # --tiempo: charcos, caracoles y arcoíris van con el tiempo elegido
+                self.llovio = self.llovio_semana = self.tiempo_hoy.llueve
+            elif real:
                 self.llovio = self.clima.llovio_hace(8)
                 self.llovio_semana = self.clima.llovio_hace(96)
             else:
@@ -214,9 +245,7 @@ class Mundo:
                              if d["fecha"] and d["fecha"] > hoy and d["nombre"].lower() not in en_salas]
         self.avisos_gente += self._sin_convocados(presentes)
         self.cumples = [p["nombre"] for p in presentes if F.es_cumple(p, hoy)]
-        # la tarta va junto a la entrada, en el lado donde quepa (con los regalos ocupa ~20 columnas)
-        e = self.plan.entrada
-        self.x_cumple = e + 30 if e + 30 + 20 <= ANCHO - 3 else max(3, e - 50)
+        self.x_cumple = self._sitio_tarta()
         vivos = {p["nombre"] for p in presentes}
         # Halloween: los que se fueron vuelven como hormigas esqueleto (del 26 al 31 de octubre)
         for p in self.esqueletos(hoy, idos_hoy):
@@ -225,11 +254,18 @@ class Mundo:
         for n in list(self.hormigas):
             if n not in vivos:   # antes suelta lo que llevaba y lo que estaba haciendo
                 self.hormigas.pop(n).liberar(self)
+        # el color de quien no tiene uno fijo: el que ya tenía o, si es nueva, el menos usado,
+        # contando los fijos y los ya guardados de todas las que están
         usados = [p["color"] for p in presentes if p.get("color")]
+        if self.estado is not None:
+            usados += [self.estado.colores[p["nombre"]] for p in presentes
+                       if not p.get("color") and not p.get("esqueleto") and p["nombre"] in self.estado.colores]
         for i, p in enumerate(presentes):
             if not p.get("color") and self.estado is not None and not p.get("esqueleto"):
+                nueva = p["nombre"] not in self.estado.colores
                 p = dict(p, color=self.estado.color(p["nombre"], usados, COLORES))
-                usados.append(p["color"])
+                if nueva:
+                    usados.append(p["color"])
             h = self.hormigas.get(p["nombre"])
             if h is None:
                 h = self.hormigas[p["nombre"]] = Hormiga(p, i, self)
@@ -240,6 +276,20 @@ class Mundo:
                 h.persona, h.sala = p, p["sala"]  # la han cambiado de sala
                 if p.get("color"):
                     h.color = color(p["color"])
+
+    def _sitio_tarta(self):
+        """Dónde va la tarta: junto a la entrada, en el lado donde quepa (con los regalos ocupa ~20
+        columnas) y, si no, lo más cerca posible; nunca encima del cementerio (su sitio lo apunta
+        el dibujo en zona_cementerio) ni de los montículos de las salidas."""
+        e = self.plan.entrada
+        zonas = [(sx - 9, sx + 9) for sx in self.salidas_x_grid]
+        if getattr(self, "zona_cementerio", None):
+            zonas.append(self.zona_cementerio)
+
+        def libre(x):
+            return 3 <= x and x + 20 <= ANCHO - 3 and all(x + 20 < a or x > b for a, b in zonas)
+        candidatos = [e + 30, e - 50] + sorted(range(3, ANCHO - 22), key=lambda x: abs(x - e - 30))
+        return next((x for x in candidatos if libre(x)), e + 30 if e + 50 <= ANCHO - 3 else max(3, e - 50))
 
     def _sin_convocados(self, presentes):
         """Avisos de las reuniones que hoy no convocan a nadie que esté (una sala sin gente,
@@ -308,7 +358,7 @@ class Mundo:
                     continue
                 self._citas_hechas.add(clave)
                 quien = r.get("quien", "todos")
-                hs = list(self.hormigas.values())
+                hs = [x for x in self.hormigas.values() if not x.esqueleto]   # los esqueletos, de paseo
                 if isinstance(quien, list):
                     nombres = {n.lower() for n in quien}
                     invitadas = [x for x in hs if x.nombre.lower() in nombres]
@@ -328,8 +378,9 @@ class Mundo:
         if not jefe or not laborable or not ini <= hora < fin:
             return
         despacho = self.sala_por_clave.get(jefe["clave"])
-        jefes = [x for x in self.hormigas.values() if x.sala == jefe["clave"]]
-        otras = [x for x in self.hormigas.values() if x.sala != jefe["clave"] and not x.cita
+        vivas = [x for x in self.hormigas.values() if not x.esqueleto]   # los esqueletos ni llaman ni van
+        jefes = [x for x in vivas if x.sala == jefe["clave"]]
+        otras = [x for x in vivas if x.sala != jefe["clave"] and not x.cita
                  and x.carga_cosa is None and not x.escoltando]
         if despacho and jefes and otras and self._espera_jefe <= 0:
             self._espera_jefe = self.vida.rng.uniform(900, 2400)
@@ -341,14 +392,17 @@ class Mundo:
     def _franja(self, clave, defecto):
         """Una franja horaria de [horario] en config.toml, "HH:MM-HH:MM", en horas decimales."""
         texto = str(self.cfg.get("horario", {}).get(clave, defecto))
-        for t in (texto, defecto):
+        for t in (texto, defecto):   # ya viene comprobada al cargar; aun así, una mala no tumba nada
             try:
                 ini, fin = (v.strip() for v in t.split("-"))
-                return tuple(int(h) + int(m) / 60 for h, m in (ini.split(":"), fin.split(":")))
+                ini, fin = (int(h) + int(m) / 60 for h, m in (ini.split(":"), fin.split(":")))
+                if 0 <= ini < fin <= 24:
+                    return ini, fin
             except ValueError:
-                if t == texto and ("horario", clave) not in self._avisado:
-                    self._avisado.add(("horario", clave))
-                    self.avisos.append("horario: %s mal escrito (%s)" % (clave, texto))
+                pass
+            if t == texto and ("horario", clave) not in self._avisado:
+                self._avisado.add(("horario", clave))
+                self.avisos.append("horario: %s mal escrito (%s)" % (clave, texto))
         return (0, 0)
 
     def ganas_de_comer(self, hora):
@@ -440,7 +494,7 @@ class Mundo:
                 adios = adios[:j] + adios[j:j + 1].upper() + adios[j + 1:]
                 adios += "" if adios[-1] in ".!?…»\"" else "."
                 ev.append((k, k + 0.2, "%s se va del hormiguero. %s" % (d["nombre"], adios)))
-        if (f.month, f.day) == (10, 26) and idos and self.cfg.get("halloween", {}).get("esqueletos"):
+        if (f.month, f.day) == (10, 26) and idos and self.cfg.get("halloween", {}).get("esqueletos") is True:
             ev.append((k, k + 0.2, "¡Los que se fueron salen del cementerio! Pasearán por aquí hasta Halloween."))
         tdia = self._tiempo_de(f)
         if tdia is None:
@@ -463,7 +517,7 @@ class Mundo:
 
     def esqueletos(self, hoy, idos_hoy):
         """Con [halloween] esqueletos = true, del 26 al 31 de octubre los que se fueron vuelven."""
-        if not self.cfg.get("halloween", {}).get("esqueletos", False):
+        if self.cfg.get("halloween", {}).get("esqueletos", False) is not True:   # sólo con true
             return []
         if not (hoy.month == 10 and 26 <= hoy.day <= 31):
             return []
@@ -476,7 +530,10 @@ class Mundo:
         return out
 
     def _tiempo_de(self, fecha):
-        """Cómo fue el tiempo de un día: lo apuntado de OpenWeather si se usa, si no el de respaldo."""
+        """Cómo fue el tiempo de un día: el elegido con --tiempo (hoy), lo apuntado de OpenWeather
+        si se usa o, si no, el de respaldo."""
+        if self.cfg.get("tiempo_forzado") and fecha == self.ahora.date():
+            return self.tiempo_hoy
         if self.clima:
             d = self.clima.dia(fecha)
             if d is None:
@@ -533,19 +590,15 @@ class Mundo:
             if desde is None:
                 continue
             for mu in self.muebles_de(s):
-                d = mu.get("aparece", mu.get("dia", 0))
-                if mu.get("fecha"):
-                    try:
-                        d = (_fecha(mu["fecha"]) - self.fundacion).days
-                    except ValueError:
-                        continue
-                try:
-                    d = int(d)
-                except (TypeError, ValueError):
+                try:   # el mismo día en que aparece en el dibujo (pixel/render.py)
+                    d = int(mu.get("aparece", 0))
+                except (TypeError, ValueError, OverflowError):
                     continue
                 d = max(d, desde) if d > 0 else 0
                 if 0 < d <= self.dia:
-                    ev.append((d, d + 0.6, "%s: %s nuevo." % (s.nombre, mu.get("nombre", mu.get("pieza", "algo")))))
+                    pieza = str(mu.get("pieza", "")).strip().lower()
+                    que = str(mu.get("nombre") or PIEZAS_DIARIO.get(pieza, pieza or "algo")).strip()
+                    ev.append((d, d + 0.6, "Novedad en %s: %s." % (s.nombre, que)))
         dias = int(self.dia)
         # los días ya calculados se guardan (si no cambia la gente ni el calendario)
         firma = (id(self.fiestas), tuple((p["nombre"], str(p.get("cumple")), p["alta"]) for p in self.personas),

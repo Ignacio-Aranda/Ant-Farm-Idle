@@ -14,6 +14,7 @@ Pi no ve las variables de la sesión: allí, el fichero (o OPENWEATHER_API_KEY=.
 
 import datetime
 import json
+import math
 import os
 import threading
 import time
@@ -24,6 +25,16 @@ from . import tiempo as T
 
 URL = "https://api.openweathermap.org/data/2.5/weather"
 VALIDO = 3 * 3600   # segundos que se fían de los últimos datos si no llegan nuevos
+FALLOS_AVISO = 3    # peticiones seguidas rechazadas por la clave antes de avisar
+
+
+def _marca(v):
+    """Una marca de tiempo guardada, o None si no lo es o es del futuro (se guardó con el reloj
+    adelantado: si no, se fiaría de esos datos, o no pediría otros, hasta esa fecha)."""
+    if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) \
+            and 0 < v <= time.time() + 60:
+        return float(v)
+    return None
 
 
 def _intensidad(codigo):
@@ -84,6 +95,7 @@ class OpenWeather:
         self.ultima_lluvia = None    # marca de tiempo de la última vez que llovía
         self.ultima_nieve = None
         self.error = None
+        self.fallos = 0              # peticiones seguidas que ha rechazado OpenWeather (clave mala...)
         self._leer()
         self.proximo = self.hora + self.cada   # cuándo toca pedirlos otra vez
         threading.Thread(target=self._bucle, daemon=True, name="openweather").start()
@@ -91,21 +103,29 @@ class OpenWeather:
     # ---------------------------------------------------------------- disco
 
     def _leer(self):
+        """Lo guardado en openweather.json. Lo que no tiene la forma de siempre (el fichero editado
+        a mano o dañado) es como si no estuviera."""
         try:
-            with open(self.ruta) as f:
+            with open(self.ruta, encoding="utf-8") as f:
                 d = json.load(f)
-            self.datos, self.hora = d.get("datos"), float(d.get("hora", 0))
-            self.historial = d.get("historial", {})
-            self.ultima_lluvia = d.get("ultima_lluvia")
-            self.ultima_nieve = d.get("ultima_nieve")
         except (OSError, ValueError):
-            pass
+            return
+        if not isinstance(d, dict):
+            return
+        hora = _marca(d.get("hora"))
+        if isinstance(d.get("datos"), dict) and hora is not None:
+            self.datos, self.hora = d["datos"], hora
+        historial = d.get("historial")
+        if isinstance(historial, dict):
+            self.historial = {k: v for k, v in historial.items() if isinstance(v, dict)}
+        self.ultima_lluvia = _marca(d.get("ultima_lluvia"))
+        self.ultima_nieve = _marca(d.get("ultima_nieve"))
 
     def _guardar(self):
         try:
             os.makedirs(os.path.dirname(self.ruta), exist_ok=True)
             tmp = self.ruta + ".tmp"
-            with open(tmp, "w") as f:
+            with open(tmp, "w", encoding="utf-8") as f:
                 json.dump({"datos": self.datos, "hora": self.hora, "historial": self.historial,
                            "ultima_lluvia": self.ultima_lluvia, "ultima_nieve": self.ultima_nieve}, f)
             os.replace(tmp, self.ruta)
@@ -116,7 +136,9 @@ class OpenWeather:
 
     def _bucle(self):
         while True:
-            if time.time() >= self.proximo:
+            ahora = time.time()
+            # si el reloj ha ido hacia atrás, el próximo quedaría muy lejos: toca ya
+            if ahora >= self.proximo or self.proximo - ahora > max(self.cada, 120) + 60:
                 self._pedir()
             time.sleep(30)
 
@@ -129,6 +151,9 @@ class OpenWeather:
             real = TiempoReal(datos, self.zona)
         except Exception as e:      # sin red, clave mala, respuesta rara...: se sigue con lo que había
             self.error = str(e)
+            # la clave mal copiada o aún sin activar (401) o una petición que no vale: se avisa
+            codigo = getattr(e, "code", None)
+            self.fallos = self.fallos + 1 if codigo in (400, 401, 403, 404) else 0
             # reintenta en dos minutos; los datos de antes conservan su hora (y caducan a su tiempo)
             self.proximo = time.time() + 120
             return
@@ -136,12 +161,13 @@ class OpenWeather:
         self.proximo = ahora + self.cada
         hoy = T.ahora(self.zona).date().isoformat()
         with self.cerrojo:
-            self.datos, self.hora, self.error = datos, ahora, None
+            self.datos, self.hora, self.error, self.fallos = datos, ahora, None, 0
             dia = self.historial.setdefault(hoy, {"llueve": False, "tormenta": False, "nieve": False,
                                                   "calima": False, "tmax": real.temp})
             for k in ("llueve", "tormenta", "nieve", "calima"):
-                dia[k] = dia[k] or getattr(real, k)
-            dia["tmax"] = max(dia.get("tmax", real.temp), real.temp)
+                dia[k] = bool(dia.get(k)) or getattr(real, k)
+            tmax = dia.get("tmax")
+            dia["tmax"] = max(tmax, real.temp) if isinstance(tmax, (int, float)) else real.temp
             if real.llueve or real.nieve:
                 self.ultima_lluvia = ahora
             if real.nieve:
@@ -156,11 +182,11 @@ class OpenWeather:
     def actual(self):
         """El tiempo de ahora, o None si no hay datos recientes."""
         with self.cerrojo:
-            if self.datos is None or time.time() - self.hora > VALIDO:
+            if self.datos is None or not 0 <= time.time() - self.hora <= VALIDO:
                 return None
             try:
                 return TiempoReal(self.datos, self.zona)
-            except (KeyError, TypeError, ValueError):
+            except (KeyError, TypeError, ValueError, IndexError, AttributeError):   # datos con otra forma
                 return None
 
     def llovio_hace(self, horas):
@@ -173,6 +199,13 @@ class OpenWeather:
         """Lo que se apuntó de ese día (o None si no se sabe)."""
         return self.historial.get(fecha.isoformat())
 
+    def aviso(self):
+        """Un aviso si OpenWeather lleva varias peticiones seguidas rechazando la clave (o None)."""
+        if self.fallos < FALLOS_AVISO:
+            return None
+        return ("tiempo: OpenWeather no acepta la clave (%s): mira que esté bien copiada (las nuevas "
+                "tardan unas horas en funcionar); mientras, uso el tiempo estadístico" % self.error)
+
 
 def desde_config(cfg, raiz):
     """Crea el cliente si hay clave y [tiempo] no dice lo contrario; si no, None."""
@@ -181,11 +214,13 @@ def desde_config(cfg, raiz):
         return None
     clave = os.environ.get("OPENWEATHER_API_KEY", "").strip()
     if not clave:
-        try:
-            with open(os.path.join(raiz, "local", "openweather_clave.txt")) as f:
+        try:   # utf-8-sig: también si el Bloc de notas la guardó «con BOM»
+            with open(os.path.join(raiz, "local", "openweather_clave.txt"), encoding="utf-8-sig") as f:
                 clave = f.read().strip()
-        except OSError:
-            clave = str(t.get("clave", "")).strip()
+        except (OSError, ValueError):
+            clave = ""
+    if not clave:   # ni en el entorno ni en el fichero (o está vacío): la de config.toml
+        clave = str(t.get("clave", "")).strip()
     if not clave:
         return None
     ciudad = cfg.get("ciudad", {})

@@ -12,7 +12,7 @@ from motor.sprites import cargar_toml
 from . import estado as E
 from . import fiestas as F
 from . import tiempo as T
-from .tierra import ANCHO_MIN, OBRAS, PISOS
+from .tierra import ANCHO_MIN, OBRAS, PISOS, clave_de
 from .tiempo import MALAGA
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -30,6 +30,14 @@ NUMEROS = (("general", "fps_pixel", 20, False), ("general", "texto_aumento", 0, 
            ("ciudad", "lat", MALAGA[0], False), ("ciudad", "lon", MALAGA[1], False),
            ("tiempo", "cada_minutos", 10, False), ("nido", "entrada", 20, True),
            ("paisaje", "cementerio", 74, False))
+# los que tienen un rango: (mínimo, máximo); fuera de él, aviso y el extremo más cercano
+RANGOS = {("general", "fps_pixel"): (1, 60), ("general", "texto_aumento"): (-3, 8),
+          ("ciudad", "lat"): (-90, 90), ("ciudad", "lon"): (-180, 180)}
+# los sí o no de config.toml: (sección, clave, valor por defecto)
+SI_NO = (("general", "texto_suavizado", True), ("halloween", "esqueletos", False))
+# los textos de config.toml que sólo pueden ser unos cuantos: (sección, clave, valores; el primero, por defecto)
+OPCIONES = (("tiempo", "fuente", ("openweather", "estadistico")), ("nido", "cavar", ("encendido", "fecha")))
+HORARIO = {"desayuno": "10:30-11:00", "comida": "13:30-15:30", "jornada": "09:00-18:00"}
 DIAS = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
 
 
@@ -45,10 +53,29 @@ def _numero(d, clave, defecto, avisos, donde, entero=True, sep=": "):
         if not math.isfinite(n):
             raise ValueError
         return int(n) if entero else n
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):   # OverflowError: un entero de TOML con cientos de cifras
         avisos.append("%s%s%s debe ser un número (%s)"
                       % (donde, sep, clave, "no lo tengo en cuenta" if defecto is None else "puse %s" % defecto))
         return defecto
+
+
+def si_no(v):
+    """Un sí o no: true o false (también escritos entre comillas, o "sí" y "no"); None si es otra cosa."""
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, str):
+        return {"true": True, "si": True, "false": False, "no": False}.get(_llano(v))
+    return None
+
+
+def _si_no(d, clave, defecto, avisos, donde, sep=": "):
+    """d[clave] como sí o no; si es otra cosa, aviso y el valor por defecto."""
+    v = si_no(d.get(clave, defecto))
+    if v is None:
+        avisos.append("%s%s%s debe ser true o false (puse %s)"
+                      % (donde, sep, clave, "true" if defecto else "false"))
+        return defecto
+    return v
 
 
 def _texto(d, clave, defecto, avisos, donde):
@@ -130,7 +157,7 @@ def cargar_tipos(carpeta, avisos):
         except Exception as e:
             avisos.append("%s: %s" % (donde, e))
             continue
-        funcion = str(d.get("funcion", "otra")).lower()
+        funcion = str(d.get("funcion", "otra")).strip().lower()
         if funcion not in FUNCIONES:
             avisos.append("%s: función desconocida «%s»" % (donde, funcion))
             funcion = "otra"
@@ -143,15 +170,36 @@ def cargar_tipos(carpeta, avisos):
         if suelo not in SUELOS:
             avisos.append("%s: suelo «%s» no existe (madera, baldosa o tierra; puse madera)" % (donde, suelo))
             suelo = "madera"
+        muebles = _tablas(d, "mueble", avisos, donde, "pieza")
+        for mu in muebles:
+            for k in ("funcion", "paredes", "suelo", "mueble"):
+                if k in mu:
+                    avisos.append("%s: «%s» está dentro de un [[mueble]] (%s) y el tipo no lo ve; ponlo "
+                                  "arriba, antes del primer [[mueble]]" % (donde, k, mu.get("pieza", "?")))
         tipos[clave] = {"funcion": funcion, "paredes": paredes, "suelo": suelo, "fichero": donde,
-                        "muebles": _tablas(d, "mueble", avisos, donde, "pieza")}
+                        "muebles": muebles}
     return tipos
+
+
+# las claves de la sala: escritas debajo de un [[miembro]], [[reunion]] o [[mueble]] son de ese
+# bloque (así lo lee TOML) y la sala no las ve
+CLAVES_SALA = ("planta", "nivel", "x", "ancho", "tipo", "jefe", "miembro", "reunion", "mueble")
+
+
+def _fuera_de_sitio(bloque, que, donde, avisos):
+    """Avisa de las claves de la sala que han quedado dentro de un bloque."""
+    for k in CLAVES_SALA:
+        if k in bloque:
+            avisos.append("%s: «%s» está dentro de %s y la sala no lo ve; ponlo arriba, antes del "
+                          "primer [[...]]" % (donde, k, que))
 
 
 def _sala(d, nombre, tipos, avisos):
     """Una sala de salas/*.toml, con cada valor comprobado (los que están mal, con aviso)."""
     donde = "salas/" + nombre
-    tipo = str(d.get("tipo", "trabajo")).lower()
+    tipo = str(d.get("tipo", "trabajo")).strip().lower()
+    # vale escrito con otras mayúsculas, tildes o espacios ("Almacén" para tipos/almacen.toml)
+    tipo = {clave_de(t): t for t in tipos}.get(clave_de(tipo), tipo)
     if tipo not in tipos:
         avisos.append("%s: no existe el tipo «%s» (en tipos/)" % (donde, tipo))
     color = d.get("color", "blanco")
@@ -172,6 +220,7 @@ def _sala(d, nombre, tipos, avisos):
     for m in _tablas(d, "miembro", avisos, donde, "nombre"):
         m = dict(m)
         m["nombre"] = str(m.get("nombre", "")).strip()
+        _fuera_de_sitio(m, "un [[miembro]]" + (" (%s)" % m["nombre"] if m["nombre"] else ""), donde, avisos)
         if not m["nombre"]:
             avisos.append("%s: hay un [[miembro]] sin nombre" % donde)
             continue
@@ -191,6 +240,7 @@ def _sala(d, nombre, tipos, avisos):
     dias = {_llano(x): x for x in DIAS}
     for r in _tablas(d, "reunion", avisos, donde):
         que = "%s: reunión «%s»" % (donde, r.get("nombre", "Reunión"))
+        _fuera_de_sitio(r, "una [[reunion]] (%s)" % r.get("nombre", "Reunión"), donde, avisos)
         hora = _hora(r.get("hora", "10:00"))
         dia = _llano(r.get("dia", "todos"))
         if hora is None:
@@ -200,6 +250,9 @@ def _sala(d, nombre, tipos, avisos):
         else:
             reuniones.append(dict(r, hora="%02d:%02d" % hora, dia=dias.get(dia, dia),
                                   minutos=_numero(r, "minutos", 60, avisos, que, entero=False)))
+    muebles = _tablas(d, "mueble", avisos, donde, "pieza")
+    for mu in muebles:
+        _fuera_de_sitio(mu, "un [[mueble]] (%s)" % mu.get("pieza", "?"), donde, avisos)
     return {
         "clave": os.path.splitext(nombre)[0].lower(),
         "fichero": donde,
@@ -211,9 +264,9 @@ def _sala(d, nombre, tipos, avisos):
         "tipo": tipo,
         "funcion": tipos.get(tipo, {}).get("funcion", "trabajo"),
         "reuniones": reuniones,
-        "jefe": bool(d.get("jefe", False)),
+        "jefe": _si_no(d, "jefe", False, avisos, donde),
         "miembros": miembros,
-        "muebles": _tablas(d, "mueble", avisos, donde, "pieza"),
+        "muebles": muebles,
     }
 
 
@@ -227,8 +280,9 @@ def _repetidos(salas, idos, avisos):
             n = m["nombre"]
             if n.lower() in vistos:
                 otro = "%s (%s)" % (n, s["nombre"])
-                if otro.lower() in vistos:
-                    avisos.append("%s: «%s» está repetido; sale una sola vez" % (s["fichero"], n))
+                if otro.lower() in vistos:   # ya hay una «Ana» y una «Ana (Sala)»: ésta no sale
+                    avisos.append("%s: hay más de dos «%s»; las que sobran no salen (cambia un nombre)"
+                                  % (s["fichero"], n))
                     continue
                 donde = [vistos[n.lower()]] + ([s["fichero"]] if s["fichero"] != vistos[n.lower()] else [])
                 avisos.append("hay dos «%s» (en %s): la segunda sale como «%s»"
@@ -278,12 +332,48 @@ def _convocadas(salas, avisos):
         s["reuniones"] = buenas
 
 
+def _franja(texto):
+    """"HH:MM-HH:MM" -> (inicio, fin) en horas decimales, o None si está mal escrita, alguna hora
+    no existe o termina antes de empezar."""
+    try:
+        ini, fin = (_hora(v) for v in str(texto).split("-"))
+    except ValueError:
+        return None
+    if ini is None or fin is None or ini >= fin:
+        return None
+    return ini[0] + ini[1] / 60, fin[0] + fin[1] / 60
+
+
 def _revisar_config(cfg, avisos):
-    """Los números de config.toml (también escritos como texto), las obras de [nido] y la zona horaria."""
+    """Los números de config.toml (también escritos como texto), los sí o no, las opciones,
+    el horario, las obras de [nido] y la zona horaria."""
     for seccion, clave, defecto, entero in NUMEROS:
         s = cfg.get(seccion, {})
         if clave in s:
             s[clave] = _numero(s, clave, defecto, avisos, "config: [%s]" % seccion, entero, " ")
+            a, b = RANGOS.get((seccion, clave), (s[clave], s[clave]))
+            if not a <= s[clave] <= b:
+                s[clave] = max(a, min(b, s[clave]))
+                avisos.append("config: [%s] %s va de %s a %s (puse %s)" % (seccion, clave, a, b, s[clave]))
+    for seccion, clave, defecto in SI_NO:
+        s = cfg.get(seccion, {})
+        if clave in s:
+            s[clave] = _si_no(s, clave, defecto, avisos, "config: [%s]" % seccion, " ")
+    for seccion, clave, valores in OPCIONES:
+        s = cfg.get(seccion, {})
+        if clave in s:
+            v = _llano(s[clave])
+            if v not in valores:
+                avisos.append("config: [%s] %s «%s» no existe (%s; puse %s)"
+                              % (seccion, clave, s[clave], " o ".join(valores), valores[0]))
+                v = valores[0]
+            s[clave] = v
+    horario = cfg.get("horario", {})
+    for clave in HORARIO:
+        if clave in horario and _franja(horario[clave]) is None:
+            avisos.append("config: [horario] %s mal escrito (%s), usa \"HH:MM-HH:MM\", de 00:00 a 23:59 "
+                          "y la primera antes que la segunda (puse %s)" % (clave, horario[clave], HORARIO[clave]))
+            horario[clave] = HORARIO[clave]
     nido = cfg.get("nido", {})
     if "obras" in nido and not isinstance(nido["obras"], list):
         avisos.append("config: [nido] obras debe ser una lista, p. ej. [\"despensa\", \"museo\"] "
@@ -294,17 +384,31 @@ def _revisar_config(cfg, avisos):
         if len(obras) < len(nido["obras"]):
             avisos.append("config: [nido] obras: cada obra es un nombre entre comillas")
         nido["obras"] = obras
-    claves = [n.lower() for n in nido["obras"]] if "obras" in nido else [o["clave"] for o in OBRAS]
-    for n in claves:
-        if n not in cfg["tipos"]:
+    nombres = nido["obras"] if "obras" in nido else [o["clave"] for o in OBRAS]
+    # como en mundo.py: cada obra usa el tipo de su nombre, sin mirar mayúsculas, tildes ni espacios
+    hay = {clave_de(t) for t in cfg["tipos"]}
+    for n in nombres:
+        if clave_de(n) not in hay:
             avisos.append("config: [nido] la obra «%s» no tiene tipo en tipos/ (será una sala vacía)" % n)
     ciudad = cfg.get("ciudad", {})
     zona = str(ciudad.pop("zona_horaria", "")).strip()
     if zona and T.zona_horaria(zona) is None:
-        avisos.append("config: [ciudad] zona_horaria «%s» no existe (p. ej. \"Europe/Madrid\"; "
-                      "uso la del ordenador)" % zona)
+        if T.sin_zonas_horarias():
+            avisos.append("config: [ciudad] zona_horaria: este ordenador no tiene la lista de zonas "
+                          "horarias (en Windows: py -m pip install tzdata); uso la del ordenador")
+        else:
+            avisos.append("config: [ciudad] zona_horaria «%s» no existe (p. ej. \"Europe/Madrid\"; "
+                          "uso la del ordenador)" % zona)
     elif zona:
         ciudad["zona_horaria"] = zona
+
+
+def _semilla(v):
+    """¿Vale como semilla? Un número o un texto (con una lista, una tabla o una fecha, el
+    trazado no se podría calcular)."""
+    if isinstance(v, float):
+        return math.isfinite(v)
+    return isinstance(v, (int, str)) and not isinstance(v, bool)
 
 
 def guarda_estado(args):
@@ -350,19 +454,26 @@ def cargar(args, avisos):
     # guardó): una errata no cambia de hormiguero
     falta_f, falta_s = "fundacion" not in general_usuario, "semilla" not in general_usuario
     mal_f = not falta_f and _fundacion(general_usuario["fundacion"]) is None
-    if mal_f:   # se usa la del primer arranque si la hay (sin crearla), o la de por defecto
+    mal_s = not falta_s and not _semilla(general_usuario["semilla"])
+    # mal escritas: se usan las del primer arranque si las hay (sin crearlas), o las de por defecto
+    if mal_f:
         avisos.append("config: fundacion mal escrita (%s), usa AAAA-MM-DD (de 1900 a 2999)"
                       % general_usuario["fundacion"])
-    if falta_f or falta_s or mal_f:
+    if mal_s:
+        avisos.append("config: semilla mal escrita (%s), usa un número entero" % general_usuario["semilla"])
+    if falta_f or falta_s or mal_f or mal_s:
         hoy = T.ahora(cfg.get("ciudad", {}).get("zona_horaria")).date()
         previo = E.de_verdad(RAIZ) if fallo else None
         fundacion, semilla = previo or E.inicio(RAIZ, falta_f, falta_s, guarda_estado(args) and not fallo, hoy)
         if (falta_f or mal_f) and fundacion:
             cfg["general"]["fundacion"] = fundacion
-        if falta_s and semilla is not None:
+        if (falta_s or mal_s) and semilla is not None:
             cfg["general"]["semilla"] = semilla
     fundacion = _fundacion(cfg["general"]["fundacion"]) or _dia(POR_DEFECTO["general"]["fundacion"])
     cfg["general"]["fundacion"] = fundacion.isoformat()
+    cfg["config_ilegible"] = fallo   # Mundo sigue cavando como la última vez (local/estado.json)
+    if not _semilla(cfg["general"]["semilla"]):   # la mal escrita, sin otra guardada (o una rara en estado.json)
+        cfg["general"]["semilla"] = POR_DEFECTO["general"]["semilla"]
     tipos = cargar_tipos(args.tipos, avisos)
     cfg["tipos"] = tipos
     cfg["raiz"] = RAIZ
@@ -388,6 +499,8 @@ def cargar(args, avisos):
             for d in _tablas(datos, "ido", avisos, "idos.toml", "nombre"):
                 if str(d.get("nombre", "")).strip():
                     idos.append(dict(d, nombre=str(d["nombre"]).strip()))
+                else:   # como un [[miembro]] sin nombre: se avisa (p. ej. «nombe» mal escrito)
+                    avisos.append("idos.toml: hay un [[ido]] sin nombre")
     _repetidos(salas, idos, avisos)
     _convocadas(salas, avisos)
     fiestas = []
@@ -400,11 +513,13 @@ def cargar(args, avisos):
 
 
 def firma(args):
-    """Fecha de modificación de los ficheros de gente (para recargar al guardar)."""
+    """Fecha de modificación de los ficheros (para recargar al guardar). También config.toml y
+    tipos/, que no se aplican hasta reiniciar: así se avisa de que hay que reiniciar."""
     rutas = [args.idos, args.config, args.calendario]
-    if os.path.isdir(args.salas):   # sólo los .toml (no los .swp ni los ocultos de los editores)
-        rutas += [os.path.join(args.salas, n) for n in sorted(os.listdir(args.salas))
-                  if n.endswith(".toml") and not n.startswith(".")]
+    for carpeta in (args.salas, args.tipos):
+        if os.path.isdir(carpeta):   # sólo los .toml (no los .swp ni los ocultos de los editores)
+            rutas += [os.path.join(carpeta, n) for n in sorted(os.listdir(carpeta))
+                      if n.endswith(".toml") and not n.startswith(".")]
     out = []
     for r in rutas:
         try:
@@ -471,7 +586,7 @@ def fechas_importantes(inicio, fiestas, salas, idos, dias=400):
         if cumples:
             cosas.append("Cumpleaños de " + ", ".join(cumples[:6]) + ("..." if len(cumples) > 6 else ""))
         for i in idos:
-            if str(i.get("fecha", "")) == d.isoformat():
+            if i.get("fecha") and _dia(i["fecha"]) == d:
                 cosas.append("Se va " + i["nombre"])
         if cosas:
             out[d] = " · ".join(cosas)
